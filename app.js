@@ -1,12 +1,37 @@
 
+/*
+
+This code is protected using MIT licence
+
+© Copyright 2025 Kamil Kijak
+
+*/
+
+
 require("dotenv").config();
 
+const path = require("path");
 
 const express = require("express");
 const http = require("http");
 
 const app = express();
 
+app.use(express.json());
+
+
+if(Number(process.env.PRODUCTION) || 0) {
+    app.use(express.static(path.join(__dirname, "vite-app", "dist", "index.html")));
+}
+
+
+app.use((req, res) => {
+    if(Number(process.env.PRODUCTION) || 0) {
+        res.sendFile(path.join(__dirname, "vite-app", 'dist', 'index.html'));
+    } else {
+        res.status(404).send("<h1>404 - page not found</h1>")
+    }
+})
 
 const server = http.createServer(app);
 
