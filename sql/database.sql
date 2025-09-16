@@ -7,13 +7,13 @@ USE software_house_database;
 CREATE TABLE `users` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
     `email` VARCHAR(50) UNIQUE NOT NULL,
-    `username` VARCHAR(50) NOT NULL,
+    `username` VARCHAR(50) UNIQUE NOT NULL,
     `country` VARCHAR(50) NOT NULL,
     `password_hash` VARCHAR(60) NOT NULL,
     `remember_login` BOOLEAN NOT NULL DEFAULT 0,
     `double_verification` BOOLEAN NOT NULL DEFAULT 0,
     `profile_description` VARCHAR(255) DEFAULT NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `subscriptions` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
@@ -24,13 +24,13 @@ CREATE TABLE `subscriptions` (
     INDEX idx_subscribed (ID_subscribed),
     FOREIGN KEY (`ID_user`) REFERENCES users(`ID`) ON DELETE CASCADE,
     FOREIGN KEY (`ID_subscribed`) REFERENCES users(`ID`) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `email_verifications` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
     `code_hash` VARCHAR(60) NOT NULL,
     FOREIGN KEY (`ID`) REFERENCES users(`ID`) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `notifications` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
@@ -39,7 +39,7 @@ CREATE TABLE `notifications` (
     `ID_user` CHAR(21) NOT NULL,
     INDEX idx_user (ID_user),
     FOREIGN KEY (`ID_user`) REFERENCES users(`ID`) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `applications` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
@@ -51,7 +51,7 @@ CREATE TABLE `applications` (
     `ID_user` CHAR(21),
     INDEX idx_user (ID_user),
     FOREIGN KEY (`ID_user`) REFERENCES users(`ID`) ON DELETE SET NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `app_tags` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
@@ -59,7 +59,7 @@ CREATE TABLE `app_tags` (
     `ID_application` CHAR(21) NOT NULL,
     INDEX idx_application (ID_application),
     FOREIGN KEY (`ID_application`) REFERENCES applications(`ID`) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `opinions` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
@@ -71,7 +71,7 @@ CREATE TABLE `opinions` (
     INDEX idx_user (ID_user),
     FOREIGN KEY (`ID_user`) REFERENCES users(`ID`) ON DELETE CASCADE,
     FOREIGN KEY (`ID_application`) REFERENCES applications(`ID`) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `app_screens` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
@@ -79,7 +79,7 @@ CREATE TABLE `app_screens` (
     `ID_application` CHAR(21) NOT NULL,
     INDEX idx_application (ID_application),
     FOREIGN KEY (`ID_application`) REFERENCES applications(`ID`) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `social_links` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
@@ -89,4 +89,4 @@ CREATE TABLE `social_links` (
     INDEX idx_user (ID_user),
     FOREIGN KEY (`ID_user`) REFERENCES users(`ID`) ON DELETE CASCADE
 
-) ENGINE=InnoDB
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
