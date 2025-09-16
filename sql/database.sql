@@ -73,7 +73,20 @@ CREATE TABLE `opinions` (
     FOREIGN KEY (`ID_application`) REFERENCES applications(`ID`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
-CREATE TABLE `screens` (
+CREATE TABLE `app_screens` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
-    `description` VARCHAR(25) DEFAULT NULL
+    `description` VARCHAR(25) DEFAULT NULL,
+    `ID_application` CHAR(21) NOT NULL,
+    INDEX idx_application (ID_application),
+    FOREIGN KEY (`ID_application`) REFERENCES applications(`ID`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE `social_links` (
+	`ID` CHAR(21) NOT NULL PRIMARY KEY,
+    `name` VARCHAR(25) DEFAULT NULL,
+    `href` VARCHAR(255) NOT NULL,
+    `ID_user` CHAR(21) NOT NULL,
+    INDEX idx_user (ID_user),
+    FOREIGN KEY (`ID_user`) REFERENCES users(`ID`) ON DELETE CASCADE
+
 ) ENGINE=InnoDB
