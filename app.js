@@ -11,6 +11,7 @@ This code is protected using MIT licence
 require("dotenv").config();
 
 const path = require("path");
+const cookieParser = require("cookie-parser");
 
 const express = require("express");
 const http = require("http");
@@ -18,6 +19,7 @@ const http = require("http");
 const app = express();
 
 app.use(express.json());
+app.use(cookieParser());
 
 
 if(Number(process.env.PRODUCTION) || 0) {
