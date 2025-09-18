@@ -16,10 +16,15 @@ const cookieParser = require("cookie-parser");
 const express = require("express");
 const http = require("http");
 
+const userRouter = require("./routes/users")
+
 const app = express();
 
 app.use(express.json());
 app.use(cookieParser());
+
+// routes
+app.use("/api/users", userRouter);
 
 
 if(Number(process.env.PRODUCTION) || 0) {
