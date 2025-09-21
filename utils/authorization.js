@@ -14,6 +14,7 @@ function authorization() {
                 httpOnly:true,
                 secure:false
             });
+            req.session = payload;
             next();
         } catch(e) {
             res.status(403).json({error:"access denied"});
@@ -24,8 +25,8 @@ function authorization() {
         if(req.cookies["REFRESH_TOKEN"]) {
             if(req.cookies["ACCESS_TOKEN"]) {
                 try {
-                    const decoded = jwt.verify(req.cookies["ACCESS_TOKEN"], process.env.ACCESS_TOKEN_KEY || "DTFxS1341Pt4dS6yTnm7o9");
-                    req.session = decoded;
+                    const {iat, exp, nbf, ...payload} = jwt.verify(req.cookies["ACCESS_TOKEN"], process.env.ACCESS_TOKEN_KEY || "DTFxS1341Pt4dS6yTnm7o9");
+                    req.session = payload;
                     next();
                 } catch(e) {
                     createAccessToken(req, res, next);
