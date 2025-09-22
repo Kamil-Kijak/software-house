@@ -28,12 +28,13 @@ CREATE TABLE `subscriptions` (
 CREATE TABLE `email_verifications` (
 	`email` CHAR(50) NOT NULL PRIMARY KEY,
     `code_hash` VARCHAR(60) NOT NULL,
-    `verified` BOOLEAN NOT NULL DEFAULT 0
+    `verified` BOOLEAN NOT NULL DEFAULT 0,
+    `expire_date` CHAR(29) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `notifications` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
-    `send_date` CHAR(25) NOT NULL,
+    `send_date` CHAR(29) NOT NULL,
     `href` VARCHAR(255) NOT NULL,
     `ID_user` CHAR(21) NOT NULL,
     INDEX idx_user (ID_user),
@@ -45,7 +46,7 @@ CREATE TABLE `applications` (
     `name` VARCHAR(25) NOT NULL,
     `description` TEXT NOT NULL,
     `app_file` VARCHAR(35) NOT NULL,
-    `update_date` CHAR(25) NOT NULL,
+    `update_date` CHAR(29) NOT NULL,
     `status` ENUM("release", "early-access", "beta-tests") NOT NULL DEFAULT "release",
     `ID_user` CHAR(21),
     INDEX idx_user (ID_user),
