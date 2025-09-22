@@ -5,7 +5,7 @@ const nanoID = require("nanoid");
 
 const checkBody = require("../utils/checkBody");
 const sqlQuery = require("../utils/mysqlQuery");
-const requestEmailVerification = require("../utils/emailVerification");
+const {requestRegisterEmailVerification} = require("../utils/emailVerification");
 
 const router = express.Router();
 
@@ -21,18 +21,18 @@ router.post("/register_user", checkBody(["email", "username", "country", "passwo
         const checkUsernameExist = await sqlQuery(res, "SELECT COUNT(username) as count FROM users WHERE username = ?", [username]);
         if(checkUsernameExist[0].count == 0) {
             // checking email verification
-            const checkEmailVerified = await sqlQuery(res, "SELECT count(email) FROM email_verifications WHERE email = ? AND verified = 1", [email]);
+            const checkEmailVerified = await sqlQuery(res, "SELECT count(email) as count FROM email_verifications WHERE email = ? AND verified = 1", [email]);
             if(checkEmailVerified[0].count == 0) {
                 // request email verification
-                await requestEmailVerification(res, email);
+                await requestRegisterEmailVerification(res, email);
                 res.status(202).json({message:"Verification created waiting for verify email", verificationCreated:true});
             } else {
                 // register user
                 const ID = nanoID.nanoid();
                 const passwordHash = await bcrypt.hash(password, 12);
-                const insertUserResult = await sqlQuery(res, "INSERT INTO users() VALUES(?, ?, ?, ?, ?, 0, NULL)", [ID, email, username, country, passwordHash]);
+                await sqlQuery(res, "INSERT INTO users() VALUES(?, ?, ?, ?, ?, 0, NULL)", [ID, email, username, country, passwordHash]);
                 console.log("Created new user with ID: ", ID);
-                res.status(201).json({message:"registered successfully", ID:insertUserResult.insertId});
+                res.status(201).json({message:"registered successfully", ID:ID, registered:true});
             }
         } else {
             res.status(406).json({error:"This username is already taken"});
@@ -40,7 +40,21 @@ router.post("/register_user", checkBody(["email", "username", "country", "passwo
     } else {
         res.status(406).json({error:"This email is already taken"});
     }
-    res.status(200).json({result});
 });
+
+router.post("/verify_email", checkBody(["email", "code"]), async (req, res) => {
+    const {email, code} = req.body;
+    const verifyResult = await sqlQuery(res, "SELECT email, code_hash FROM email_verifications WHERE email = ?", [email]);
+    if(verifyResult.length > 0) {
+        if(await bcrypt.compare(code, verifyResult[0].code_hash)) {
+            await sqlQuery(res, "UPDATE email_verifications SET verified = 1 WHERE email = ?", [email]);
+            res.status(200).json({message:"verification succeed"});
+        } else {
+            res.status(400).json({error:"Invalid code"});
+        }
+    } else {
+        res.status(404).json({error:"Email not found"});
+    }
+})
 
 module.exports = router;
