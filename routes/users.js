@@ -7,6 +7,7 @@ const checkBody = require("../utils/checkBody");
 const sqlQuery = require("../utils/mysqlQuery");
 const {requestRegisterEmailVerification} = require("../utils/emailVerification");
 const createRefreshToken = require("../utils/createRefreshToken");
+const authorization = require("../utils/authorization");
 
 const router = express.Router();
 
@@ -77,13 +78,19 @@ router.post("/login_user", checkBody(["email", "password", "autoLogin"]), async 
                 username:userResult[0].username
             }
             createRefreshToken(res, payload);
-            res.status(200).json({message:"logged successfully"})
+            res.status(200).json({message:"logged successfully", session:payload})
         } else {
             res.status(400).json({error:"Invalid password"})
         }
     } else {
         res.status(400).json({error:"Invalid email"})
     }
+});
+
+router.get("/logout_user", authorization(), (req, res) => {
+    res.clearCookie("ACCESS_TOKEN");
+    res.clearCookie("REFRESH_TOKEN");
+    res.status(200).json({message:"Session ended"});
 })
 
 module.exports = router;
