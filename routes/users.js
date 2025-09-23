@@ -8,8 +8,55 @@ const sqlQuery = require("../utils/mysqlQuery");
 const {requestRegisterEmailVerification} = require("../utils/emailVerification");
 const createRefreshToken = require("../utils/createRefreshToken");
 const authorization = require("../utils/authorization");
+const sendMail = require("../utils/sendMail");
 
 const router = express.Router();
+
+function sendRegisterSucceedEmail(email, username) {
+    const mailOptions = {
+        from:`Software House <${process.env.MAIL_USER || "something@gmail.com"}>`,
+        to:`${email}`,
+        subject:"Software house registration complete",
+        html:`
+            <style>
+                * {
+                    padding: 0;
+                    margin: 0;
+                    box-sizing: border-box;
+                    font-family: Arial;
+                }
+            </style>
+
+
+            <section style="background-color:#1C1C1C;padding: 0 5rem;">
+                <section style="background-color:#1C1C1C;">
+                    <h1 style="color:#c34800;text-align:center;padding: 1rem;">Software House registration succeed</h1>
+                </section>
+                <section style="background-color:#292929;padding: .5rem;">
+                    <section style="margin-top: 10px;">
+                        <p style="color:white;text-align: center;font-size: 1.1rem;font-weight: bold;">Hello ${username}</p>
+                        <p style="color:white;text-align: center;font-size: 1.1rem;font-weight: bold;margin-top: .5rem;">Your email adress have been registered in 'Software House' service</p>
+                    </section>
+                    <section style="display: flex;justify-content: center;margin-top: 10px;">
+                        <div style="border: 2px solid white;margin-top: 10px;width: 100%;"></div>
+                    </section>
+                    <section style="margin-top: 10px;">
+                        <p style="color:white;text-align: center;font-size: 1.8rem;font-weight:bolder;margin-top: 1rem;padding: 2rem;">Enjoy the service, ${username}</p>
+                    </section>
+                </section>
+                <section style="background-color: #1C1C1C;padding: .5rem;">
+                    <section>
+                        <h1 style="color:#c34800;text-align:center;padding: 1rem;">Software house</h1>
+                    </section>
+                    <section>
+                        <h1 style="color:#c34800;text-align:center;padding: 1rem;font-size: 1.2rem;">© Copyright 2026 Kamil Kijak</h1>
+                    </section>
+                </section>
+            </section>
+        `
+    }
+    sendMail(mailOptions);
+}
 
 /*
     User endpoints for app API
@@ -36,6 +83,8 @@ router.post("/register_user", checkBody(["email", "username", "country", "passwo
                     const passwordHash = await bcrypt.hash(password, 12);
                     await sqlQuery(res, "INSERT INTO users() VALUES(?, ?, ?, ?, ?, 0, NULL)", [ID, email, username, country, passwordHash]);
                     console.log("Created new user with ID: ", ID);
+                    // sending email after registration
+                    sendRegisterSucceedEmail(email, username);
                     res.status(201).json({message:"registered successfully", ID:ID, registered:true});
                 } else {
                     // request email verification after expired verification
@@ -107,8 +156,24 @@ router.get("/logout_user", (req, res) => {
 
 router.post("/update_profile", checkBody(["username", "country", "double_verification", "profile_description"]), async (req, res) => {
     const {username, country, double_verification, profile_description} = req.body;
-    await sqlQuery(res, "UPDATE users SET username = ?, country = ?, double_verification = ?, profile_description = ?", [username, country, double_verification, profile_description]);
+    await sqlQuery(res, "UPDATE users SET username = ?, country = ?, double_verification = ?, profile_description = ? WHERE ID = ?", [username, country, double_verification, profile_description, req.session.userID]);
     res.status(200).json({message:"Profile updated"});
 });
+
+router.delete("/delete_profile", checkBody(["password"]), async (req, res) => {
+    const {password} = req.body;
+    const userResult = await sqlQuery(res, "SELECT password_hash FROM users WHERE ID = ?", [req.session.userID]);
+    if(userResult.length > 0) {
+        if(await(bcrypt.compare(password, userResult[0].password_hash))) {
+            await sqlQuery(res, "DELETE FROM users WHERE ID = ?", [req.session.userID]);
+            console.log("Profile deletion ID:", req.session.userID);
+            res.status(200).json({message:"Deletion succeed"});
+        } else {
+            res.status(403).json({error:"Invalid password"});
+        }
+    } else {
+        res.status(404).json({error:"User not found"});
+    }
+})
 
 module.exports = router;
