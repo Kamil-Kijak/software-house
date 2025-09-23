@@ -66,13 +66,13 @@ router.post("/verify_email", checkBody(["email", "code"]), async (req, res) => {
     }
 });
 
-router.post("/login_user", checkBody(["email", "password", "autoLogin"]), async (req, res) => {
-    const {email, password, autoLogin} = req.body;
-    const userResult = await sqlQuery(res, "SELECT ID, email, username, password_hash FROM users WHERE email = ?", [email]);
+router.post("/login_user", checkBody(["email", "password", "auto_login"]), async (req, res) => {
+    const {email, password, auto_login} = req.body;
+    const userResult = await sqlQuery(res, "SELECT ID, email, username, password_hash, double_verification FROM users WHERE email = ?", [email]);
     if(userResult.length > 0) {
         if(await bcrypt.compare(password, userResult[0].password_hash)) {
             const payload = {
-                autoLogin:autoLogin,
+                auto_login:auto_login,
                 userID:userResult[0].ID,
                 email:userResult[0].email,
                 username:userResult[0].username
@@ -87,10 +87,28 @@ router.post("/login_user", checkBody(["email", "password", "autoLogin"]), async 
     }
 });
 
-router.get("/logout_user", authorization(), (req, res) => {
+router.use(authorization());
+
+router.get("/automatic_login", (req, res) => {
+    const session = req.session;
+    if(session.auto_login) {
+        createRefreshToken(res, session);
+        res.status(200).json({message:"logged successfully", session:payload});
+    } else {
+        res.status(403).json({error:"Access denied for automatic login"});
+    }
+});
+
+router.get("/logout_user", (req, res) => {
     res.clearCookie("ACCESS_TOKEN");
     res.clearCookie("REFRESH_TOKEN");
     res.status(200).json({message:"Session ended"});
 })
+
+router.post("/update_profile", checkBody(["username", "country", "double_verification", "profile_description"]), async (req, res) => {
+    const {username, country, double_verification, profile_description} = req.body;
+    await sqlQuery(res, "UPDATE users SET username = ?, country = ?, double_verification = ?, profile_description = ?", [username, country, double_verification, profile_description]);
+    res.status(200).json({message:"Profile updated"});
+});
 
 module.exports = router;

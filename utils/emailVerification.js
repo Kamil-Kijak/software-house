@@ -24,8 +24,43 @@ async function requestRegisterEmailVerification(res, email) {
         to:`${email}`,
         subject:"Software House email verification",
         html:`
-            Your verification code for mail ${email} is
-            <h1>${code}</h1>
+            <style>
+                * {
+                    padding: 0;
+                    margin: 0;
+                    box-sizing: border-box;
+                    font-family: Arial;
+                }
+            </style>
+
+
+            <section style="background-color:#1C1C1C;">
+                <h1 style="color:#c34800;text-align:center;padding: 1rem;">Welcome to Software House service</h1>
+            </section>
+            <section style="background-color:#292929;padding: .5rem;">
+                <section style="margin-top: 10px;">
+                    <p style="color:white;text-align: center;font-size: 1.1rem;font-weight: bold;">You are trying to register using your email adress</p>
+                    <p style="color:white;text-align: center;font-size: 1.1rem;font-weight: bold;margin-top: .5rem;">to our 'Software House' service</p>
+                    <p style="color:white;text-align: center;font-size: 1.1rem;font-weight: bold;margin-top: .5rem;">We need to verificate your email before registration</p>
+                </section>
+                <section style="display: flex;justify-content: center;margin-top: 10px;">
+                    <div style="border: 2px solid white;margin-top: 10px;width: 100%;"></div>
+                </section>
+                <section style="margin-top: 10px;">
+                    <p style="color:white;text-align: center;font-size: 1.8rem;font-weight:bolder;margin-top: 1rem;">Here is your email verification code</p>
+                </section>
+                <section style="margin: 3rem;background-color: #1C1C1C;padding: 1rem;display: flex;justify-content: center;">
+                    <h1 style="color:white;text-align: center;font-size: 1.7rem;font-weight:bolder;margin: auto;">${code}</h1>
+                </section>
+            </section>
+            <section style="background-color: #1C1C1C;padding: .5rem;">
+                <section>
+                    <h1 style="color:#c34800;text-align:center;padding: 1rem;">Software house</h1>
+                </section>
+                <section>
+                    <h1 style="color:#c34800;text-align:center;padding: 1rem;font-size: 1.2rem;">© Copyright 2026 Kamil Kijak</h1>
+                </section>
+            </section>
         `
     }
     sendMail(mailOptions);
