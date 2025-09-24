@@ -41,7 +41,10 @@ function sendRegisterSucceedEmail(email, username) {
                         <div style="border: 2px solid white;margin-top: 10px;width: 100%;"></div>
                     </section>
                     <section style="margin-top: 10px;">
-                        <p style="color:white;text-align: center;font-size: 1.8rem;font-weight:bolder;margin-top: 1rem;padding: 2rem;">Enjoy the service, ${username}</p>
+                        <p style="color:white;text-align: center;font-size: 1.4rem;font-weight:bolder;margin-top: .4rem;padding: 1rem;">Explore softwares</p>
+                        <p style="color:white;text-align: center;font-size: 1.4rem;font-weight:bolder;margin-top: .4rem;padding: 1rem;">Rate them and download</p>
+                        <p style="color:white;text-align: center;font-size: 1.4rem;font-weight:bolder;margin-top: .4rem;padding: 1rem;">Publish your own software and things</p>
+                        <p style="color:white;text-align: center;font-size: 1.6rem;font-weight:bolder;margin-top: 1rem;padding: 2rem;">Enjoy the service, ${username}</p>
                     </section>
                 </section>
                 <section style="background-color: #1C1C1C;padding: .5rem;">
@@ -62,6 +65,7 @@ function sendRegisterSucceedEmail(email, username) {
     User endpoints for app API
     endpoints related to mysql users table
 */
+
 
 router.post("/register_user", checkBody(["email", "username", "country", "password"]), async (req, res) => {
     const {email, username, country, password} = req.body;
