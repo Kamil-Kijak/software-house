@@ -66,6 +66,10 @@ function sendRegisterSucceedEmail(email, username) {
     endpoints related to mysql users table
 */
 
+router.get("/registered_count", async (req, res) => {
+    const countResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM users", []);
+    res.status(200).json({message:"Selected count of registered users", count:countResult[0].count})
+});
 
 router.post("/register_user", checkBody(["email", "username", "country", "password"]), async (req, res) => {
     const {email, username, country, password} = req.body;
