@@ -5,7 +5,7 @@ const nanoID = require("nanoid");
 
 const checkBody = require("../utils/checkBody");
 const sqlQuery = require("../utils/mysqlQuery");
-const {requestRegisterEmailVerification} = require("../utils/emailVerification");
+const {requestRegisterEmailVerification, requestEmailDoubleVerification} = require("../utils/emailVerification");
 const createRefreshToken = require("../utils/createRefreshToken");
 const authorization = require("../utils/authorization");
 const sendMail = require("../utils/sendMail");
@@ -78,27 +78,21 @@ router.post("/register_user", checkBody(["email", "username", "country", "passwo
         const checkUsernameExist = await sqlQuery(res, "SELECT COUNT(username) as count FROM users WHERE username = ?", [username]);
         if(checkUsernameExist[0].count == 0) {
             // checking email verification
-            const checkEmailVerified = await sqlQuery(res, "SELECT expire_date FROM email_verifications WHERE email = ? AND verified = 1", [email]);
+            const checkEmailVerified = await sqlQuery(res, "SELECT verified FROM email_verifications WHERE email = ? AND verified = 1", [email]);
             if(checkEmailVerified.length == 0) {
                 // request email verification
                 await requestRegisterEmailVerification(res, email);
                 res.status(202).json({message:"Verification created waiting for verify email", verificationCreated:true});
             } else {
-                const expireDate = new Date(checkEmailVerified[0].expire_date);
-                if(expireDate.getTime() >= new Date()) {
-                    // register user
-                    const ID = nanoID.nanoid();
-                    const passwordHash = await bcrypt.hash(password, 12);
-                    await sqlQuery(res, "INSERT INTO users() VALUES(?, ?, ?, ?, ?, 0, NULL)", [ID, email, username, country, passwordHash]);
-                    console.log("Created new user with ID: ", ID);
-                    // sending email after registration
-                    sendRegisterSucceedEmail(email, username);
-                    res.status(201).json({message:"registered successfully", ID:ID, registered:true});
-                } else {
-                    // request email verification after expired verification
-                    await requestRegisterEmailVerification(res, email);
-                    res.status(202).json({message:"Creating new verification, because old expired", verificationCreated:true});
-                }
+                // register user
+                await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
+                const ID = nanoID.nanoid();
+                const passwordHash = await bcrypt.hash(password, 12);
+                await sqlQuery(res, "INSERT INTO users() VALUES(?, ?, ?, ?, ?, 0, NULL)", [ID, email, username, country, passwordHash]);
+                console.log("Created new user with ID: ", ID);
+                // sending email after registration
+                sendRegisterSucceedEmail(email, username);
+                res.status(201).json({message:"registered successfully", ID:ID, registered:true});
             }
         } else {
             res.status(406).json({error:"This username is already taken"});
@@ -110,13 +104,19 @@ router.post("/register_user", checkBody(["email", "username", "country", "passwo
 
 router.post("/verify_email", checkBody(["email", "code"]), async (req, res) => {
     const {email, code} = req.body;
-    const verifyResult = await sqlQuery(res, "SELECT email, code_hash FROM email_verifications WHERE email = ?", [email]);
+    const verifyResult = await sqlQuery(res, "SELECT email, code_hash, expire_date FROM email_verifications WHERE email = ?", [email]);
     if(verifyResult.length > 0) {
-        if(await bcrypt.compare(code, verifyResult[0].code_hash)) {
-            await sqlQuery(res, "UPDATE email_verifications SET verified = 1 WHERE email = ?", [email]);
-            res.status(200).json({message:"verification succeed"});
+        // checking expire date and code
+        const expireDate = new Date(verifyResult[0].expire_date);
+        if(expireDate.getTime() >= new Date()) {
+            if(await bcrypt.compare(code, verifyResult[0].code_hash)) {
+                await sqlQuery(res, "UPDATE email_verifications SET verified = 1 WHERE email = ?", [email]);
+                res.status(200).json({message:"verification succeed"});
+            } else {
+                res.status(400).json({error:"Invalid code"});
+            }
         } else {
-            res.status(400).json({error:"Invalid code"});
+            res.status(400).json({error:"Verification expired"});
         }
     } else {
         res.status(404).json({error:"Email not found"});
@@ -134,8 +134,24 @@ router.post("/login_user", checkBody(["email", "password", "auto_login"]), async
                 email:userResult[0].email,
                 username:userResult[0].username
             }
-            createRefreshToken(res, payload);
-            res.status(200).json({message:"logged successfully", session:payload})
+            if(userResult[0].double_verification == 1) {
+                // checking email verification
+                const checkEmailVerified = await sqlQuery(res, "SELECT verified FROM email_verifications WHERE email = ? AND verified = 1", [email]);
+                if(checkEmailVerified.length == 0) {
+                    // sending verification
+                    await requestEmailDoubleVerification(res, email);
+                    res.status(202).json({message:"Verification created waiting for verify email", verificationCreated:true});
+                } else {
+                    // login user
+                    await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
+                    createRefreshToken(res, payload);
+                    res.status(200).json({message:"logged successfully", session:payload})
+                }
+            } else {
+                // login user
+                createRefreshToken(res, payload);
+                res.status(200).json({message:"logged successfully", session:payload})
+            }
         } else {
             res.status(400).json({error:"Invalid password"})
         }

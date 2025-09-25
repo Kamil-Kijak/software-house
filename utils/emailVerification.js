@@ -11,7 +11,7 @@ async function requestRegisterEmailVerification(res, email) {
     if(verificationExist[0].count == 1) {
         await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
     }
-    const code = nanoid(9);
+    const code = nanoid(9).toLowerCase();
     const codeHash = await bcrypt.hash(code, 12);
 
     const now = DateTime.local();
@@ -71,7 +71,7 @@ async function requestEmailDoubleVerification(res, email) {
     if(verificationExist[0].count == 1) {
         await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
     }
-    const code = nanoid(9);
+    const code = nanoid(9).toLowerCase();
     const codeHash = await bcrypt.hash(code, 12);
 
     const now = DateTime.local();
