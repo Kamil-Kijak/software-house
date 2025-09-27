@@ -16,10 +16,10 @@ const fileFilter = function (req, file, cb) {
 
 const profileImageStorage = multer.diskStorage({
     destination:(req, file, cb) => {
-        const folderPath = path.join(__dirname, `files`, `${req.session.userID}`);
+        const folderPath = path.join(process.cwd(), `files`, `${req.session.userID}`);
         if(!fs.existsSync(folderPath)) {
             fs.mkdirSync(folderPath, { recursive: true }, (err) => {
-                console.log("Error with creating new folder: ", folderPath);
+                console.log("Error with creating new folder: ", err);
             });
         }
         cb(null, folderPath);

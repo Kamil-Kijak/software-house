@@ -1,14 +1,19 @@
 
 const express = require("express");
-const bcrypt = require("bcrypt")
+const bcrypt = require("bcrypt");
 const nanoID = require("nanoid");
+const fs = require("fs");
+const path = require("path");
 
 const checkBody = require("../utils/checkBody");
+const checkQuery = require("../utils/checkQuery");
+
 const sqlQuery = require("../utils/mysqlQuery");
 const {requestRegisterEmailVerification, requestEmailDoubleVerification} = require("../utils/emailVerification");
 const createRefreshToken = require("../utils/createRefreshToken");
 const authorization = require("../utils/authorization");
 const sendMail = require("../utils/sendMail");
+const {profileImageUpload} = require("../utils/multerUploads");
 
 const router = express.Router();
 
@@ -71,6 +76,26 @@ router.get("/registered_count", async (req, res) => {
     res.status(200).json({message:"Selected count of registered users", count:countResult[0].count})
 });
 
+router.get("/username_available", checkQuery(["username"]), async (req, res) => {
+    const {username} = req.query;
+    const usernameExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [username]);
+    if(usernameExistResult[0].count == 0) {
+        res.status(200).json({message:"This username is available"});
+    } else {
+        res.status(409).json({error:"This username is already exist"});
+    }
+});
+
+router.get("/email_available", checkQuery(["email"]), async (req, res) => {
+    const {email} = req.query;
+    const emailExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [email]);
+    if(emailExistResult[0].count == 0) {
+        res.status(200).json({message:"This email is available"});
+    } else {
+        res.status(409).json({error:"This email is already exist"});
+    }
+});
+
 router.post("/register_user", checkBody(["email", "username", "country", "password"]), async (req, res) => {
     const {email, username, country, password} = req.body;
     const checkEmailExistResult = await sqlQuery(res, "SELECT COUNT(email) as count FROM users WHERE email = ?", [email]);
@@ -92,13 +117,13 @@ router.post("/register_user", checkBody(["email", "username", "country", "passwo
                 console.log("Created new user with ID: ", ID);
                 // sending email after registration
                 sendRegisterSucceedEmail(email, username);
-                res.status(201).json({message:"registered successfully", ID:ID, registered:true});
+                res.status(201).json({message:"Registered successfully", ID:ID, registered:true});
             }
         } else {
-            res.status(406).json({error:"This username is already taken"});
+            res.status(409).json({error:"This username is already taken"});
         }
     } else {
-        res.status(406).json({error:"This email is already taken"});
+        res.status(409).json({error:"This email is already taken"});
     }
 });
 
@@ -111,7 +136,7 @@ router.post("/verify_email", checkBody(["email", "code"]), async (req, res) => {
         if(expireDate.getTime() >= new Date()) {
             if(await bcrypt.compare(code, verifyResult[0].code_hash)) {
                 await sqlQuery(res, "UPDATE email_verifications SET verified = 1 WHERE email = ?", [email]);
-                res.status(200).json({message:"verification succeed"});
+                res.status(200).json({message:"Verification succeed"});
             } else {
                 res.status(400).json({error:"Invalid code"});
             }
@@ -131,8 +156,6 @@ router.post("/login_user", checkBody(["email", "password", "auto_login"]), async
             const payload = {
                 auto_login:auto_login,
                 userID:userResult[0].ID,
-                email:userResult[0].email,
-                username:userResult[0].username
             }
             if(userResult[0].double_verification == 1) {
                 // checking email verification
@@ -145,12 +168,12 @@ router.post("/login_user", checkBody(["email", "password", "auto_login"]), async
                     // login user
                     await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
                     createRefreshToken(res, payload);
-                    res.status(200).json({message:"logged successfully", session:payload})
+                    res.status(200).json({message:"Logged successfully", session:payload})
                 }
             } else {
                 // login user
                 createRefreshToken(res, payload);
-                res.status(200).json({message:"logged successfully", session:payload})
+                res.status(200).json({message:"Logged successfully", session:payload})
             }
         } else {
             res.status(400).json({error:"Invalid password"})
@@ -176,12 +199,90 @@ router.get("/logout_user", (req, res) => {
     res.clearCookie("ACCESS_TOKEN");
     res.clearCookie("REFRESH_TOKEN");
     res.status(200).json({message:"Session ended"});
-})
+});
+
+router.get("/user_data", async (req, res) => {
+    const {ID} = req.params;
+    const result = await sqlQuery(res, "SELECT username, country, profile_description FROM users WHERE ID = ?", [ID]);
+    res.status(200).json({message:"Retriviered user data", user_data:result[0]});
+});
+
+const getUserPicture = (res, ID) => {
+    const directory = path.join(process.cwd(), "files", ID);
+    const responseDefaultProfilePicture = () => {
+        // It will be changed to sending default profile file
+        res.status(404).json({error:"User profile picture not found"});
+    }
+    if(fs.existsSync(directory)) {
+        fs.readdir(directory, (err, files) => {
+            if(err) {
+                responseDefaultProfilePicture();
+            }
+            const foundFile = files.find((file) => 
+                path.parse(file).name == "profile"
+            );
+            if(!foundFile) {
+                responseDefaultProfilePicture();
+            } else {
+                // sending profile picture
+                res.status(200).sendFile(path.join(directory, foundFile));
+            }
+        })
+    } else {
+        responseDefaultProfilePicture();
+    }
+}
+
+
+router.get("/user_picture", async (req, res) => {
+    const {ID} = req.params;
+    getUserPicture(res, ID);
+});
+
+router.get("/my_data", async (req, res) => {
+    const result = await sqlQuery(res, "SELECT username, country, profile_description FROM users WHERE ID = ?", [req.session.userID]);
+    res.status(200).json({message:"Retriviered my data", user_data:result[0]});
+});
+
+router.get("/my_picture", async (req, res) => {
+    getUserPicture(res, req.session.userID);
+});
+
+router.post("/upload_profile_picture", profileImageUpload.single("file"), async (req, res) => {
+    if(!req.file) {
+        res.status(400).json({error:"Error with uploading file on the server"});
+    }
+    res.status(200).json({message:"Uploaded successfully"});
+});
+
+
+router.post("/update_email", checkBody(["new_email", "password"]), async (req, res) => {
+    const {new_email, password} = req.body;
+    const emailExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM users WHERE email = ?", [new_email]);
+    if(emailExistResult[0].count == 0) {
+        const actualUserResult = await sqlQuery(res, "SELECT password_hash FROM users WHERE ID = ?", [req.session.ID]);
+        if(await bcrypt.compare(password, actualUserResult[0].password_hash)) {
+            await sqlQuery(res, "UPDATE users SET email = ? WHERE ID", [new_email, req.session.ID]);
+            res.status(200).json({message:"Email update succeed"});
+        } else {
+            res.status(400).json({error:"Invalid password"});
+        }
+    } else {
+        res.status(409).json({error:"This email is already exist"});
+    }
+});
+
+
 
 router.post("/update_profile", checkBody(["username", "country", "double_verification", "profile_description"]), async (req, res) => {
     const {username, country, double_verification, profile_description} = req.body;
-    await sqlQuery(res, "UPDATE users SET username = ?, country = ?, double_verification = ?, profile_description = ? WHERE ID = ?", [username, country, double_verification, profile_description, req.session.userID]);
-    res.status(200).json({message:"Profile updated"});
+    const usernameExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [username]);
+    if(usernameExistResult[0].count == 0) {
+        await sqlQuery(res, "UPDATE users SET username = ?, country = ?, double_verification = ?, profile_description = ? WHERE ID = ?", [username, country, double_verification, profile_description, req.session.userID]);
+        res.status(200).json({message:"Profile updated"});
+    } else {
+        res.status(409).json({error:"This username is already exist"});
+    }
 });
 
 router.delete("/delete_profile", checkBody(["password"]), async (req, res) => {
@@ -190,8 +291,8 @@ router.delete("/delete_profile", checkBody(["password"]), async (req, res) => {
     if(userResult.length > 0) {
         if(await(bcrypt.compare(password, userResult[0].password_hash))) {
             await sqlQuery(res, "DELETE FROM users WHERE ID = ?", [req.session.userID]);
-            console.log("Profile deletion ID:", req.session.userID);
-            res.status(200).json({message:"Deletion succeed"});
+            console.log("Profile delete ID:", req.session.userID);
+            res.status(200).json({message:"Delete succeed"});
         } else {
             res.status(403).json({error:"Invalid password"});
         }
