@@ -9,7 +9,7 @@ const checkBody = require("../utils/checkBody");
 const checkQuery = require("../utils/checkQuery");
 
 const sqlQuery = require("../utils/mysqlQuery");
-const {requestRegisterEmailVerification, requestEmailDoubleVerification} = require("../utils/emailVerification");
+const {requestRegisterEmailVerification, requestEmailDoubleVerification, requestPasswordChangeEmailVerification} = require("../utils/emailVerification");
 const createRefreshToken = require("../utils/createRefreshToken");
 const authorization = require("../utils/authorization");
 const sendMail = require("../utils/sendMail");
@@ -271,6 +271,25 @@ router.post("/update_email", checkBody(["new_email", "password"]), async (req, r
         res.status(409).json({error:"This email is already exist"});
     }
 });
+
+router.post("/update_password", checkBody(["new_password"]), async (req, res) => {
+    const {new_password} = req.body;
+    const actualUserResult = await sqlQuery(res, "SELECT email FROM users WHERE ID = ?", [req.session.userID]);
+    const email = actualUserResult[0].email;
+    // checking email verification
+    const checkEmailVerified = await sqlQuery(res, "SELECT verified FROM email_verifications WHERE email = ? AND verified = 1", [email]);
+    if(checkEmailVerified.length == 0) {
+        // sending verification
+        await requestPasswordChangeEmailVerification(res, email);
+        res.status(202).json({message:"Verification created waiting for verify email", verificationCreated:true});
+    } else {
+        // changing password
+        await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
+        const newPasswordHash = bcrypt.hashSync(new_password, 12);
+        await sqlQuery(res, "UPDATE users SET password_hash = ? WHERE ID = ?", [newPasswordHash, req.session.userID]);
+        res.status(200).json({message:"Password updation succeed"})
+    }
+})
 
 
 
