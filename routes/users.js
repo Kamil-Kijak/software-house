@@ -201,7 +201,7 @@ router.get("/logout_user", (req, res) => {
     res.status(200).json({message:"Session ended"});
 });
 
-router.get("/user_data", async (req, res) => {
+router.get("/user_data/:ID", async (req, res) => {
     const {ID} = req.params;
     const result = await sqlQuery(res, "SELECT username, country, profile_description FROM users WHERE ID = ?", [ID]);
     res.status(200).json({message:"Retriviered user data", user_data:result[0]});
@@ -210,8 +210,7 @@ router.get("/user_data", async (req, res) => {
 const getUserPicture = (res, ID) => {
     const directory = path.join(process.cwd(), "files", ID);
     const responseDefaultProfilePicture = () => {
-        // It will be changed to sending default profile file
-        res.status(404).json({error:"User profile picture not found"});
+        res.status(404).sendFile(path.join(process.cwd(), "assets", "defaultUserPicture.png"));
     }
     if(fs.existsSync(directory)) {
         fs.readdir(directory, (err, files) => {
@@ -234,7 +233,7 @@ const getUserPicture = (res, ID) => {
 }
 
 
-router.get("/user_picture", async (req, res) => {
+router.get("/user_picture/:ID", async (req, res) => {
     const {ID} = req.params;
     getUserPicture(res, ID);
 });
