@@ -17,7 +17,7 @@ function authorization() {
             req.session = payload;
             next();
         } catch(e) {
-            res.status(403).json({error:"Access denied", forbidden:true});
+            res.status(401).json({error:"Access denied, unauthorized", unauthorized:true});
         }
     }
 
@@ -35,7 +35,7 @@ function authorization() {
                 createAccessToken(req, res, next);
             }
         } else {
-            res.status(403).json({error:"Access denied", forbidden:true});
+            res.status(401).json({error:"Access denied, unauthorized", unauthorized:true});
         }
     }
     return auth;

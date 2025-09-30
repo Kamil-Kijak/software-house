@@ -16,7 +16,8 @@ const cookieParser = require("cookie-parser");
 const express = require("express");
 const http = require("http");
 
-const userRouter = require("./routes/users")
+const userRouter = require("./routes/users");
+const socialLinkRouter = require("./routes/socialLinks");
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use(cookieParser());
 
 // routes
 app.use("/api/users", userRouter);
+app.use("/api/social_links", socialLinkRouter);
 
 
 if(Number(process.env.PRODUCTION) || 0) {
