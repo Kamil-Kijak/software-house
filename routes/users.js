@@ -288,7 +288,7 @@ router.post("/update_password", checkBody(["new_password"]), async (req, res) =>
         await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
         const newPasswordHash = bcrypt.hashSync(new_password, 12);
         await sqlQuery(res, "UPDATE users SET password_hash = ? WHERE ID = ?", [newPasswordHash, req.session.userID]);
-        res.status(200).json({message:"Password updation succeed"})
+        res.status(200).json({message:"Password update succeed"})
     }
 })
 

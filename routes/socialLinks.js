@@ -24,6 +24,7 @@ const MAX_LINKS_PER_USER = 5;
 router.use(authorization());
 
 router.get("/my_links", async (req, res) => {
+    // returns actual logged user social links
     const userLinksResult = await sqlQuery(res, "SELECT name, href FROM social_links WHERE ID_user = ?", [req.session.userID]);
     res.status(200).json({message:"Retrivied socials links", user_social_links:userLinksResult});
 });
@@ -31,9 +32,10 @@ router.get("/my_links", async (req, res) => {
 router.post("/insert_link", checkBody(["name", "href"]), async (req, res) => {
     const {name, href} = req.body;
     const socialLinkCountResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM social_links WHERE ID_user = ?", [req.session.userID]);
+    // checking user's social links count limit
     if(socialLinkCountResult[0].count <= MAX_LINKS_PER_USER) {
         await sqlQuery(res, "INSERT INTO social_links() VALUES(?, ?, ?, ?)", [nanoID.nanoid(), name, href, req.session.userID]);
-        res.status(200).json({message:"Inserted successfully"});
+        res.status(201).json({message:"Inserted successfully"});
     } else {
         res.status(400).json({error:"Too many social links for this user"});
     }
