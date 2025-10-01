@@ -185,8 +185,16 @@ router.post("/login_user", checkBody(["email", "password", "auto_login"]), async
 router.get("/user_data/:ID", async (req, res) => {
     const {ID} = req.params;
     const userDataResult = await sqlQuery(res, "SELECT username, country, profile_description FROM users WHERE ID = ?", [ID]);
-    const userSocialLinks = await sqlQuery(res, "SELECT name, href FROM social_links WHERE ID_user = ?", [ID]);
-    res.status(200).json({message:"Retriviered user data", user_data:userDataResult[0], user_social_links:userSocialLinks});
+    const userSocialLinksResult = await sqlQuery(res, "SELECT name, href FROM social_links WHERE ID_user = ?", [ID]);
+    const userSubscriptionsCountResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_user = ?", [ID]);
+    const userSubscribersCountResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_subscribed = ?", [ID]);
+    res.status(200).json({
+        message:"Retriviered user data",
+        user_data:userDataResult[0],
+        user_social_links:userSocialLinksResult,
+        subscriptionsCount:userSubscriptionsCountResult[0].count,
+        subscribersCount:userSubscribersCountResult[0].count
+    });
 });
 
 router.get("/user_picture/:ID", async (req, res) => {
@@ -242,7 +250,15 @@ const getUserPicture = (res, ID) => {
 router.get("/my_data", async (req, res) => {
     const userDataResult = await sqlQuery(res, "SELECT username, country, profile_description FROM users WHERE ID = ?", [req.session.userID]);
     const userSocialLinks = await sqlQuery(res, "SELECT name, href FROM social_links WHERE ID_user = ?", [req.session.userID]);
-    res.status(200).json({message:"Retriviered data", user_data:userDataResult[0], user_social_links:userSocialLinks});
+    const userSubscriptionsCountResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_user = ?", [req.session.userID]);
+    const userSubscribersCountResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_subscribed = ?", [req.session.userID]);
+    res.status(200).json({
+        message:"Retriviered data",
+        user_data:userDataResult[0],
+        user_social_links:userSocialLinks,
+        subscriptionsCount:userSubscriptionsCountResult[0].count,
+        subscribersCount:userSubscribersCountResult[0].count
+    });
 });
 
 router.get("/my_picture", async (req, res) => {
