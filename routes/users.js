@@ -193,7 +193,7 @@ router.get("/user_data/:ID", async (req, res) => {
         user_data:userDataResult[0],
         user_social_links:userSocialLinksResult,
         subscriptionsCount:userSubscriptionsCountResult[0].count,
-        subscribersCount:userSubscribersCountResult[0].count
+        subscribersCount:userSubscribersCountResult[0].count,
     });
 });
 

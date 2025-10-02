@@ -23,6 +23,18 @@ router.get("/user_subscribers/:ID", async (req, res) => {
 
 router.use(authorization());
 
+router.get("/subscriptions_data/:ID", async (req, res) => {
+    const {ID} = req.params;
+    const subscriberResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_subscribed = ? AND ID_user = ?", [req.session.userID, ID]);
+    const subscribedResult = await sqlQuery(res, "SELECT notifications FROM subscriptions WHERE ID_subscribed = ? AND ID_user = ? LIMIT 1", [ID, req.session.userID]);
+    res.status(200).json({
+        message:"Retriviered user subscriptions data",
+        subscribe:subscriberResult[0].count > 0,
+        subscribed:subscribedResult.length > 0,
+        subscribedNotifications:subscribedResult[0] ? subscribedResult[0].notifications : null
+    });
+});
+
 router.get("/my_subscriptions", async (req, res) => {
     const subscriptionsResult = await sqlQuery(res, "SELECT u.username, u.ID, s.notifications FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_user = ?", [req.session.userID]);
     res.status(200).json({message:"Retrivied successfully", subscriptions_data:subscriptionsResult});
@@ -31,6 +43,25 @@ router.get("/my_subscriptions", async (req, res) => {
 router.get("/my_subscribers", async (req, res) => {
     const subscribersResult = await sqlQuery(res, "SELECT u.username, u.ID FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_subscribed = ?", [req.session.userID]);
     res.status(200).json({message:"Retrivied successfully", subscribers_data:subscribersResult});
+});
+
+router.post("/toggle_subscription", checkBody(["ID_user"]), async (req, res) => {
+    const {ID_user} = req.body;
+    const subscriptionExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_user = ? AND ID_subscribed = ?", [req.session.userID, ID_user]);
+    if(subscriptionExistResult[0].count == 0) {
+        // if subscription don't exist
+        await sqlQuery(res, "INSERT INTO subscriptions() VALUES(?, ?, ?, ?)", [nanoID.nanoid(), req.session.userID, ID_user]);
+        res.status(201).json({message:"Created new subscription"});
+    } else {
+        await sqlQuery(res, "DELETE FROM subscriptions WHERE ID_user = ? AND ID_subscribed = ?", [req.session.userID, ID_user]);
+        res.status(200).json({message:"Subscription delete succeed"});
+    }
+});
+
+router.post("/update_subscription", checkBody(["ID_user", "notifications"]), async (req, res) => {
+    const {ID_user, notifications} = req.body;
+    await sqlQuery(res, "UPDATE subscriptions SET notifications = ? WHERE ID_user = ? AND ID_subscribed = ?", [notifications, req.session.userID, ID_user]);
+    res.status(200).json({message:"Subscription update succeed"})
 });
 
 
