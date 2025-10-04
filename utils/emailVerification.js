@@ -17,7 +17,9 @@ async function requestRegisterEmailVerification(res, email) {
     const now = DateTime.local();
     const futureDate = now.plus({hours:1})
     await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toISO()]);
-    console.log(`Inserted new register email verification for email ${email}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
+    if(Number(process.env.CONSOLE_LOGS)) {
+        console.log(`New email verification for email ${"****" + String(email).substring(Math.min(4, email.length))}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
+    }
     // sending code email
     const mailOptions = {
         from:`Software House <${process.env.MAIL_USER || "something@gmail.com"}>`,
@@ -77,7 +79,9 @@ async function requestEmailDoubleVerification(res, email) {
     const now = DateTime.local();
     const futureDate = now.plus({hours:1})
     await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toISO()]);
-    console.log(`Inserted new email double-verification for email ${email}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
+    if(Number(process.env.CONSOLE_LOGS)) {
+        console.log(`New double-verification for email ${"****" + String(email).substring(Math.min(4, email.length))}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
+    }
     // sending code email
     const mailOptions = {
         from:`Software House <${process.env.MAIL_USER || "something@gmail.com"}>`,
@@ -137,7 +141,9 @@ async function requestPasswordChangeEmailVerification(res, email) {
     const now = DateTime.local();
     const futureDate = now.plus({hours:1})
     await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toISO()]);
-    console.log(`Inserted new password change for email ${email}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
+    if(Number(process.env.CONSOLE_LOGS)) {
+        console.log(`New password change verification for email ${"****" + String(email).substring(Math.min(4, email.length))}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
+    }
     // sending code email
     const mailOptions = {
         from:`Software House <${process.env.MAIL_USER || "something@gmail.com"}>`,

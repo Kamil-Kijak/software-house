@@ -10,6 +10,11 @@ const authorization = require("../utils/authorization");
 
 const router = express.Router();
 
+/*
+    Subscriptions endpoints for app API
+    endpoints related to mysql subscriptions table
+*/
+
 router.get("/user_subscriptions/:ID", async (req, res) => {
     const {ID} = req.params;
     const subscriptionsResult = await sqlQuery(res, "SELECT u.username, u.ID, s.notifications FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_user = ?", [ID]);

@@ -31,13 +31,13 @@ app.use("/api/social_links", socialLinkRouter);
 app.use("/api/subscriptions", subscriptionRouter);
 
 
-if(Number(process.env.PRODUCTION) || 0) {
+if(Number(process.env.PRODUCTION)) {
     app.use(express.static(path.join(__dirname, "vite-app", "dist", "index.html")));
 }
 
 
 app.use((req, res) => {
-    if(Number(process.env.PRODUCTION) || 0) {
+    if(Number(process.env.PRODUCTION)) {
         res.sendFile(path.join(__dirname, "vite-app", 'dist', 'index.html'));
     } else {
         res.status(404).send("<h1>404 - page not found</h1>")

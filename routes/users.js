@@ -31,8 +31,6 @@ function sendRegisterSucceedEmail(email, username) {
                     font-family: Arial;
                 }
             </style>
-
-
             <section style="background-color:#1C1C1C;padding: 0 5rem;">
                 <section style="background-color:#1C1C1C;">
                     <h1 style="color:#c34800;text-align:center;padding: 1rem;">Software House registration succeed</h1>
@@ -114,7 +112,9 @@ router.post("/register_user", checkBody(["email", "username", "country", "passwo
                 const ID = nanoID.nanoid();
                 const passwordHash = await bcrypt.hash(password, 12);
                 await sqlQuery(res, "INSERT INTO users() VALUES(?, ?, ?, ?, ?, 0, NULL)", [ID, email, username, country, passwordHash]);
-                console.log("Created new user with ID: ", ID);
+                if(Number(process.env.CONSOLE_LOGS)) {
+                    console.log(`Created new user with account ID ${ID}`);
+                }
                 // sending email after registration
                 sendRegisterSucceedEmail(email, username);
                 res.status(201).json({message:"Registered successfully", ID:ID, registered:true});
@@ -327,7 +327,9 @@ router.delete("/delete_profile", checkBody(["password"]), async (req, res) => {
     if(userResult.length > 0) {
         if(await(bcrypt.compare(password, userResult[0].password_hash))) {
             await sqlQuery(res, "DELETE FROM users WHERE ID = ?", [req.session.userID]);
-            console.log("Profile delete ID:", req.session.userID);
+            if(Number(process.env.CONSOLE_LOGS)) {
+                console.log(`Deleted user account ID ${req.session.userID}`);
+            }
             res.status(200).json({message:"Delete succeed"});
         } else {
             res.status(403).json({error:"Invalid password"});
