@@ -35,7 +35,9 @@ CREATE TABLE `email_verifications` (
 CREATE TABLE `notifications` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
     `send_date` CHAR(29) NOT NULL,
-    `href` VARCHAR(255) NOT NULL,
+    `title` VARCHAR(75) NOT NULL,
+    `read` BOOLEAN NOT NULL DEFAULT 0,
+    `href` VARCHAR(255),
     `ID_user` CHAR(21) NOT NULL,
     INDEX idx_user (ID_user),
     FOREIGN KEY (`ID_user`) REFERENCES users(`ID`) ON DELETE CASCADE

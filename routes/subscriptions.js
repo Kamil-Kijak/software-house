@@ -1,6 +1,7 @@
 
 const express = require("express");
 const nanoID = require("nanoid");
+const {DateTime} = require("luxon");
 
 const checkBody = require("../utils/checkBody");
 const sqlQuery = require("../utils/mysqlQuery");
@@ -52,9 +53,13 @@ router.post("/toggle_subscription", checkBody(["ID_user"]), async (req, res) => 
     if(subscriptionExistResult[0].count == 0) {
         // if subscription don't exist
         await sqlQuery(res, "INSERT INTO subscriptions() VALUES(?, ?, ?, ?)", [nanoID.nanoid(), req.session.userID, ID_user, "all"]);
+        // sending notification
+        const userResult = await sqlQuery(res, "SELECT username FROM users WHERE ID = ?", [req.session.userID]);
+        await sqlQuery(res, "INSERT INTO notifications() VALUES(?, ?, ?, ?)", [nanoID.nanoid(), DateTime.now().toISO(), `User ${userResult[0].username} is now subscribing you`, false, null, ID_user]);
         res.status(201).json({message:"New subscription Created"});
     } else {
         await sqlQuery(res, "DELETE FROM subscriptions WHERE ID_user = ? AND ID_subscribed = ?", [req.session.userID, ID_user]);
+        await sqlQuery(res, "DELETE FROM notifications WHERE ID_user = ?", [ID_user]);
         res.status(200).json({message:"Subscription delete succeed"});
     }
 });

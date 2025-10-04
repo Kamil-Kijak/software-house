@@ -1,6 +1,6 @@
 
 const bcrypt = require("bcrypt");
-const {DateTime} = require("luxon")
+const {DateTime} = require("luxon");
 
 const sqlQuery = require("./mysqlQuery");
 const sendMail = require("./sendMail");
