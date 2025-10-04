@@ -24,6 +24,7 @@ router.get("/user_subscribers/:ID", async (req, res) => {
 router.use(authorization());
 
 router.get("/subscriptions_data/:ID", async (req, res) => {
+    // endpoint for get data about, is this user is subscribed by me or is I subscribe this user
     const {ID} = req.params;
     const subscriberResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_subscribed = ? AND ID_user = ?", [req.session.userID, ID]);
     const subscribedResult = await sqlQuery(res, "SELECT notifications FROM subscriptions WHERE ID_subscribed = ? AND ID_user = ? LIMIT 1", [ID, req.session.userID]);
@@ -50,8 +51,8 @@ router.post("/toggle_subscription", checkBody(["ID_user"]), async (req, res) => 
     const subscriptionExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_user = ? AND ID_subscribed = ?", [req.session.userID, ID_user]);
     if(subscriptionExistResult[0].count == 0) {
         // if subscription don't exist
-        await sqlQuery(res, "INSERT INTO subscriptions() VALUES(?, ?, ?, ?)", [nanoID.nanoid(), req.session.userID, ID_user]);
-        res.status(201).json({message:"Created new subscription"});
+        await sqlQuery(res, "INSERT INTO subscriptions() VALUES(?, ?, ?, ?)", [nanoID.nanoid(), req.session.userID, ID_user, "all"]);
+        res.status(201).json({message:"New subscription Created"});
     } else {
         await sqlQuery(res, "DELETE FROM subscriptions WHERE ID_user = ? AND ID_subscribed = ?", [req.session.userID, ID_user]);
         res.status(200).json({message:"Subscription delete succeed"});
