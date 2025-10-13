@@ -19,6 +19,7 @@ const http = require("http");
 const userRouter = require("./routes/users");
 const socialLinkRouter = require("./routes/socialLinks");
 const subscriptionRouter = require("./routes/subscriptions");
+const applicationRouter = require("./routes/applications");
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use(cookieParser());
 app.use("/api/users", userRouter);
 app.use("/api/social_links", socialLinkRouter);
 app.use("/api/subscriptions", subscriptionRouter);
+app.use("/api/applications", applicationRouter);
 
 
 if(Number(process.env.PRODUCTION)) {
