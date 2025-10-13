@@ -76,7 +76,8 @@ router.get("/registered_count", async (req, res) => {
 
 router.get("/username_available", checkQuery(["username"]), async (req, res) => {
     const {username} = req.query;
-    const usernameExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [username]);
+    const trimmedUsername = username.trim();
+    const usernameExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [trimmedUsername]);
     if(usernameExistResult[0].count == 0) {
         res.status(200).json({message:"This username is available"});
     } else {
@@ -96,9 +97,10 @@ router.get("/email_available", checkQuery(["email"]), async (req, res) => {
 
 router.post("/register_user", checkBody(["email", "username", "country", "password"]), async (req, res) => {
     const {email, username, country, password} = req.body;
+    const trimmedUsername = username.trim();
     const checkEmailExistResult = await sqlQuery(res, "SELECT COUNT(email) as count FROM users WHERE email = ?", [email]);
     if(checkEmailExistResult[0].count == 0) {
-        const checkUsernameExist = await sqlQuery(res, "SELECT COUNT(username) as count FROM users WHERE username = ?", [username]);
+        const checkUsernameExist = await sqlQuery(res, "SELECT COUNT(username) as count FROM users WHERE username = ?", [trimmedUsername]);
         if(checkUsernameExist[0].count == 0) {
             // checking email verification
             const checkEmailVerified = await sqlQuery(res, "SELECT verified FROM email_verifications WHERE email = ? AND verified = 1", [email]);
@@ -111,12 +113,12 @@ router.post("/register_user", checkBody(["email", "username", "country", "passwo
                 await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
                 const ID = nanoID.nanoid();
                 const passwordHash = await bcrypt.hash(password, 12);
-                await sqlQuery(res, "INSERT INTO users() VALUES(?, ?, ?, ?, ?, 0, NULL)", [ID, email, username, country, passwordHash]);
+                await sqlQuery(res, "INSERT INTO users() VALUES(?, ?, ?, ?, ?, 0, NULL)", [ID, email, trimmedUsername, country, passwordHash]);
                 if(Number(process.env.CONSOLE_LOGS)) {
                     console.log(`Created new user with account ID ${ID}`);
                 }
                 // sending email after registration
-                sendRegisterSucceedEmail(email, username);
+                sendRegisterSucceedEmail(email, trimmedUsername);
                 res.status(201).json({message:"Registered successfully", ID:ID, registered:true});
             }
         } else {
@@ -312,9 +314,10 @@ router.post("/update_password", checkBody(["new_password"]), async (req, res) =>
 
 router.post("/update_profile", checkBody(["username", "country", "double_verification", "profile_description"]), async (req, res) => {
     const {username, country, double_verification, profile_description} = req.body;
-    const usernameExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [username]);
+    const trimmedUsername = username.trim();
+    const usernameExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [trimmedUsername]);
     if(usernameExistResult[0].count == 0) {
-        await sqlQuery(res, "UPDATE users SET username = ?, country = ?, double_verification = ?, profile_description = ? WHERE ID = ?", [username, country, double_verification, profile_description, req.session.userID]);
+        await sqlQuery(res, "UPDATE users SET username = ?, country = ?, double_verification = ?, profile_description = ? WHERE ID = ?", [trimmedUsername, country, double_verification, profile_description, req.session.userID]);
         res.status(200).json({message:"Profile updated"});
     } else {
         res.status(409).json({error:"This username is already exist"});
