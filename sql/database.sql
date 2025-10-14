@@ -51,6 +51,7 @@ CREATE TABLE `applications` (
     `update_date` CHAR(29) NOT NULL,
     `status` ENUM("release", "early-access", "beta-tests") NOT NULL DEFAULT "release",
     `public` BOOLEAN NOT NULL DEFAULT 0,
+    `downloads` INT NOT NULL DEFAULT 0,
     `ID_user` CHAR(21),
     INDEX idx_user (ID_user),
     FOREIGN KEY (`ID_user`) REFERENCES users(`ID`) ON DELETE SET NULL
