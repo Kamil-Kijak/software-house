@@ -67,7 +67,7 @@ const appFileStorage = multer.diskStorage({
         if(!req.body.ID_application) {
             cb(new Error("ID_application is not defined"), folderPath);
         }
-        const folderPath = path.join(process.cwd(), `files`, `${req.session.userID}`, "apps", `${req.body.ID_application}`);
+        const folderPath = path.join(process.cwd(), `files`, `${req.session.userID}`, "apps", `${req.body.ID_application}`, "download");
         if(!fs.existsSync(folderPath)) {
             try {
                 fs.mkdirSync(folderPath, { recursive: true });

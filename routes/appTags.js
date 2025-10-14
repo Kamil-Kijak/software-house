@@ -6,7 +6,6 @@ const nanoID = require("nanoid");
 const checkBody = require("../utils/checkBody");
 const sqlQuery = require("../utils/mysqlQuery");
 const authorization = require("../utils/authorization");
-const { DateTime } = require("luxon");
 const checkQuery = require("../utils/checkQuery");
 
 const router = express.Router();
@@ -35,25 +34,15 @@ router.post("/insert_many", checkBody(["ID_application", "tags"]), async (req, r
     res.status(201).json({massage:"Inserted many tags"});
 });
 
-router.post("/update_many", checkBody(["ID_tags", "names"]), async (req, res) => {
-    const {ID_tags, names} = req.body;
-    const IDArray = [...ID_tags];
-    const namesArray = [...names];
-    if(IDArray.length != namesArray.length) {
-        return res.status(400).json({error:"Arrays don't match with length. There aren't the same"})
-    }
-    for (let i = 0;i<IDArray.length;i++) {
-        await sqlQuery(res, "UPDATE app_tags SET name = ? WHERE ID = ?", [IDArray[i], namesArray[i]]);
-    }
-    res.status(200).json({message:"Updated many"});
+router.post("/update_tag", checkBody(["ID_tag", "name"]), async (req, res) => {
+    const {ID_tag, name} = req.body;
+    await sqlQuery(res, "UPDATE app_tags SET name = ? WHERE ID = ?", [name, ID_tag]);
+    res.status(200).json({message:"Updated successfully"});
 });
 
-router.delete("/delete_many", checkBody(["ID_tags"]), async (req, res) => {
-    const {ID_tags} = req.body;
-    const IDArray = [...ID_tags];
-    for(const ID in IDArray) {
-        await sqlQuery(res, "DELETE FROM app_tags WHERE ID = ?", [ID]);
-    }
+router.delete("/delete_tag", checkBody(["ID_tag"]), async (req, res) => {
+    const {ID_tag} = req.body;
+    await sqlQuery(res, "DELETE FROM app_tags WHERE ID = ?", [ID_tag]);
     res.status(200).json({message:"Deleted successfully"});
 });
 
