@@ -8,6 +8,7 @@ const fs = require("fs");
 const checkBody = require("../utils/checkBody");
 const sqlQuery = require("../utils/mysqlQuery");
 const authorization = require("../utils/authorization");
+const {appImageUpload, appFileUpload} = require("../utils/multerUploads");
 const { DateTime } = require("luxon");
 const checkQuery = require("../utils/checkQuery");
 
@@ -36,7 +37,7 @@ router.get("/app_screen", checkQuery(["ID"]), async (req, res) => {
     res.status(200).sendFile(path.join(filePath, image));
 });
 
-router.get("/app_desc", checkQuery(["ID_app"]), async (req, res) => {
+router.get("/app_data", checkQuery(["ID_app"]), async (req, res) => {
     const {ID_app} = req.query;
     const infoResult = await sqlQuery(res, "SELECT name, description, status, public, downloads, app_file FROM applications WHERE ID = ?", [ID_app]);
     const tagsResult = await sqlQuery(res, "SELECT name FROM app_tags WHERE ID_application = ?", [ID_app]);
@@ -108,6 +109,26 @@ router.get("/my_applications", checkQuery(["name_filter", "status_filter", "publ
         }
     });
     res.status(200).json({message:"Retriviered applications", applications:finalResult});
+});
+
+router.post("/upload_app_image", appImageUpload.single("file"), async (req, res) => {
+    // require req.body.ID_application
+    if(req.file) {
+        res.status(200).json({message:"Uploading succeed"});
+    } else {
+        res.status(400).json({error:"Uploading failed"})
+    }
+});
+
+router.post("/upload_app_file", appFileUpload.single("file"), async (req, res) => {
+    // require req.body.ID_application
+    const {ID_application} = req.body;
+    if(req.file) {
+        await sqlQuery(res, "UPDATE applications SET app_file = ?, update_date = ? WHERE ID = ?", [req.file.filename, DateTime.now().toISO(), ID_application])
+        res.status(200).json({message:"Uploading succeed"});
+    } else {
+        res.status(400).json({error:"Uploading failed"})
+    }
 });
 
 

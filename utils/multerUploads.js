@@ -116,17 +116,25 @@ const appImageUpload = multer({
     storage:appImageStorage,
     fileFilter:imageFileFilter,
     limits: { fileSize: IMAGE_MAX_MB_SIZE * 1024 * 1024 }
-})
+});
 
 const profileImageUpload = multer({
     storage:profileImageStorage,
     fileFilter:imageFileFilter,
     // max 8 MB
     limits: { fileSize: IMAGE_MAX_MB_SIZE * 1024 * 1024 }
-})
+});
+
+const appScreensUpload = multer({
+    storage:appScreensStorage,
+    fileFilter:imageFileFilter,
+    // max 8 MB
+    limits: { fileSize: IMAGE_MAX_MB_SIZE * 1024 * 1024 }
+});
 
 module.exports = {
     profileImageUpload,
     appImageUpload,
-    appFileUpload
+    appFileUpload,
+    appScreensUpload
 }
