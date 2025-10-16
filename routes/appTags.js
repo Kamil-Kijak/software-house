@@ -12,6 +12,11 @@ const router = express.Router();
 
 const MAX_TAGS_PER_APP = 10;
 
+/*
+    AppTags endpoints for app API
+    endpoints related to mysql app_tags table
+*/
+
 
 router.get("/available_tags", checkQuery(["name"]), async (req, res) => {
     const {name} = req.query;

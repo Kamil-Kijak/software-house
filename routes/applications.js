@@ -28,15 +28,6 @@ router.get("/app_image", checkQuery(["ID"]), async (req, res) => {
     res.status(200).sendFile(path.join(filePath, image));
 });
 
-router.get("/app_screen", checkQuery(["ID"]), async (req, res) => {
-    const {ID} = req.query;
-    const IDuserResult = await sqlQuery(res, "SELECT a.ID_user, a.ID as ID_app FROM applications a INNER JOIN app_screens as ON a.ID=as.ID_application WHERE as.ID = ?", [ID]);
-    const filePath = path.join(process.cwd(), "files", `${IDuserResult[0].ID_user}`, "apps", `${IDuserResult[0].ID_app}`, "screens");
-    const directory = fs.readdirSync(filePath);
-    const image = directory.find((obj) => obj.startsWith(ID));
-    res.status(200).sendFile(path.join(filePath, image));
-});
-
 router.get("/app_data", checkQuery(["ID_app"]), async (req, res) => {
     const {ID_app} = req.query;
     const infoResult = await sqlQuery(res, "SELECT name, description, status, public, downloads, app_file FROM applications WHERE ID = ?", [ID_app]);
@@ -114,6 +105,7 @@ router.get("/my_applications", checkQuery(["name_filter", "status_filter", "publ
 router.post("/upload_app_image", appImageUpload.single("file"), async (req, res) => {
     // require req.body.ID_application
     if(req.file) {
+        await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.now().toISO(), req.body.ID_application]);
         res.status(200).json({message:"Uploading succeed"});
     } else {
         res.status(400).json({error:"Uploading failed"})
@@ -124,7 +116,7 @@ router.post("/upload_app_file", appFileUpload.single("file"), async (req, res) =
     // require req.body.ID_application
     const {ID_application} = req.body;
     if(req.file) {
-        await sqlQuery(res, "UPDATE applications SET app_file = ?, update_date = ? WHERE ID = ?", [req.file.filename, DateTime.now().toISO(), ID_application])
+        await sqlQuery(res, "UPDATE applications SET app_file = ?, update_date = ? WHERE ID = ?", [req.file.filename, DateTime.now().toISO(), ID_application]);
         res.status(200).json({message:"Uploading succeed"});
     } else {
         res.status(400).json({error:"Uploading failed"})
