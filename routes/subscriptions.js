@@ -18,13 +18,13 @@ const router = express.Router();
 
 router.get("/user_subscriptions/:ID", async (req, res) => {
     const {ID} = req.params;
-    const subscriptionsResult = await sqlQuery(res, "SELECT u.username, u.ID, s.notifications FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_user = ?", [ID]);
+    const subscriptionsResult = await sqlQuery(res, "SELECT u.username, u.ID, u.profile_description, s.notifications FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_user = ?", [ID]);
     res.status(200).json({message:"Retrivied successfully", subscriptions_data:subscriptionsResult});
 });
 
 router.get("/user_subscribers/:ID", async (req, res) => {
     const {ID} = req.params;
-    const subscribersResult = await sqlQuery(res, "SELECT u.username, u.ID FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_subscribed = ?", [ID]);
+    const subscribersResult = await sqlQuery(res, "SELECT u.username, u.ID, u.profile_description FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_subscribed = ?", [ID]);
     res.status(200).json({message:"Retrivied successfully", subscribers_data:subscribersResult});
 });
 

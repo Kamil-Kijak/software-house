@@ -43,7 +43,7 @@ router.get("/app_data", checkQuery(["ID_app"]), async (req, res) => {
 
 router.get("/user_applications", checkQuery(["ID_user","name_filter"]), async (req, res) => {
     const {ID_user, name_filter} = req.query;
-    const applicationsResult = await sqlQuery(res, "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ? AND a.name LIKE ?", [ID_user, `%${name_filter}%`]);
+    const applicationsResult = await sqlQuery(res, "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ? AND a.name LIKE ?", [ID_user, `%${name_filter}%`]);
     const finalResult = [];
     applicationsResult.forEach((obj) => {
         const object = finalResult.find((value) => value.ID === obj.ID)
@@ -54,6 +54,7 @@ router.get("/user_applications", checkQuery(["ID_user","name_filter"]), async (r
                 update_date:obj.update_date,
                 public:obj.public,
                 downloads:obj.downloads,
+                description:obj.description,
                 tags:[obj.tag]
             });
         } else {
@@ -69,7 +70,7 @@ router.use(authorization());
 router.get("/my_applications", checkQuery(["name_filter", "status_filter", "public_filter"]), async (req, res) => {
     // retrive user applications using filters
     const {name_filter, status_filter, public_filter} = req.query;
-    let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ?"
+    let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ?"
     const params = [req.session.userID];
     if(public_filter) {
         sqlString+=" AND a.public = ?";
@@ -93,6 +94,7 @@ router.get("/my_applications", checkQuery(["name_filter", "status_filter", "publ
                 update_date:obj.update_date,
                 public:obj.public,
                 downloads:obj.downloads,
+                description:obj.description,
                 tags:[obj.tag]
             });
         } else {
