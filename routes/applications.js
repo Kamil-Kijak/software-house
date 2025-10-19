@@ -65,13 +65,108 @@ router.get("/user_applications", checkQuery(["ID_user","name_filter"]), async (r
 });
 
 
+router.get("/applications", checkQuery(["username_filter", "name_filter", "status_filter", "tags_filter", "downloads_filter"]), async (req, res) => {
+    const {username_filter, name_filter, status_filter, tags_filter, downloads_filter} = req.body;
+    let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag, u.ID as userID, u.username FROM applications a INNER JOIN users u ON u.ID=a.ID_user INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.public = 1";
+    const params = [req.session.userID];
+    if(tags_filter) {
+        if(tags_filter.length > 0) {
+            sqlString+= ` AND at.name IN (${tags_filter.map(obj => "?").join(", ")})`;
+            params.push(...tags_filter);
+        }
+    }
+    if(status_filter) {
+        sqlString+=" AND a.status = ?";
+        params.push(status_filter);
+    }
+    sqlString+=" AND a.name LIKE ? AND u.username LIKE ?";
+    params.push(`%${name_filter}%`, `%${username_filter}%`);
+    if(downloads_filter) {
+        sqlString+=" ORDER BY a.downloads DESC";
+    } else {
+        sqlString+=" ORDER BY a.downloads";
+    }
+    sqlString += " LIMIT 200";
+    const applicationsResult = await sqlQuery(res, sqlString, params);
+    const finalResult = [];
+    applicationsResult.forEach((obj) => {
+        const object = finalResult.find((value) => value.ID === obj.ID)
+        if(object == undefined) {
+            finalResult.push({
+                ID:obj.ID,
+                name:obj.name,
+                update_date:obj.update_date,
+                public:obj.public,
+                downloads:obj.downloads,
+                description:obj.description,
+                userID:obj.userID,
+                username:obj.username,
+                tags:[obj.tag]
+            });
+        } else {
+            object.tags.push(obj.tag);
+        }
+    });
+    res.status(200).json({message:"Retriviered applications", applications:finalResult});
+});
+
 router.use(authorization());
 
-router.get("/my_applications", checkQuery(["name_filter", "status_filter", "public_filter"]), async (req, res) => {
+router.get("/subscribed_applications", checkQuery(["username_filter", "name_filter", "status_filter", "tags_filter", "downloads_filter"]), async (req, res) => {
+    const {username_filter, name_filter, status_filter, tags_filter, downloads_filter} = req.body;
+    let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag, u.ID as userID, u.username FROM applications a INNER JOIN users u ON u.ID=a.ID_user INNER JOIN app_tags at ON at.ID_application=a.ID INNER JOIN subscriptions s ON s.ID_subscribed=a.ID_user WHERE s.ID_user = ? AND a.public = 1";
+    const params = [req.session.userID];
+    if(tags_filter) {
+        if(tags_filter.length > 0) {
+            sqlString+= ` AND at.name IN (${tags_filter.map(obj => "?").join(", ")})`;
+            params.push(...tags_filter);
+        }
+    }
+    if(status_filter) {
+        sqlString+=" AND a.status = ?";
+        params.push(status_filter);
+    }
+    sqlString+=" AND a.name LIKE ? AND u.username LIKE ?";
+    params.push(`%${name_filter}%`, `%${username_filter}%`);
+    if(downloads_filter) {
+        sqlString+=" ORDER BY a.downloads DESC";
+    } else {
+        sqlString+=" ORDER BY a.downloads";
+    }
+    const applicationsResult = await sqlQuery(res, sqlString, params);
+    const finalResult = [];
+    applicationsResult.forEach((obj) => {
+        const object = finalResult.find((value) => value.ID === obj.ID)
+        if(object == undefined) {
+            finalResult.push({
+                ID:obj.ID,
+                name:obj.name,
+                update_date:obj.update_date,
+                public:obj.public,
+                downloads:obj.downloads,
+                description:obj.description,
+                userID:obj.userID,
+                username:obj.username,
+                tags:[obj.tag]
+            });
+        } else {
+            object.tags.push(obj.tag);
+        }
+    });
+    res.status(200).json({message:"Retriviered applications", applications:finalResult});
+});
+
+router.get("/my_applications", checkQuery(["name_filter", "status_filter", "public_filter", "tags_filter", "downloads_filter"]), async (req, res) => {
     // retrive user applications using filters
-    const {name_filter, status_filter, public_filter} = req.query;
+    const {name_filter, status_filter, public_filter, tags_filter, downloads_filter} = req.query;
     let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ?"
     const params = [req.session.userID];
+    if(tags_filter) {
+        if(tags_filter.length > 0) {
+            sqlString+= ` AND at.name IN (${tags_filter.map(obj => "?").join(", ")})`;
+            params.push(...tags_filter);
+        }
+    }
     if(public_filter) {
         sqlString+=" AND a.public = ?";
         params.push(public_filter);
@@ -82,7 +177,11 @@ router.get("/my_applications", checkQuery(["name_filter", "status_filter", "publ
     }
     sqlString+=" AND a.name LIKE ?";
     params.push(`%${name_filter}%`);
-    
+    if(downloads_filter) {
+        sqlString+=" ORDER BY a.downloads DESC";
+    } else {
+        sqlString+=" ORDER BY a.downloads";
+    }
     const applicationsResult = await sqlQuery(res, sqlString, params);
     const finalResult = [];
     applicationsResult.forEach((obj) => {
