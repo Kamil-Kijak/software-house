@@ -8,6 +8,7 @@ const fs = require("fs");
 const checkBody = require("../utils/checkBody");
 const sqlQuery = require("../utils/mysqlQuery");
 const authorization = require("../utils/authorization");
+const sendNotification = require("../utils/sendNotification");
 const {appImageUpload, appFileUpload} = require("../utils/multerUploads");
 const { DateTime } = require("luxon");
 const checkQuery = require("../utils/checkQuery");
@@ -26,7 +27,25 @@ router.get("/app_image", checkQuery(["ID"]), async (req, res) => {
     const filePath = path.join(process.cwd(), "files", `${IDuserResult[0].ID_user}`, "apps", `${ID}`);
     const directory = fs.readdirSync(filePath);
     const image = directory.find((obj) => obj.startsWith("app."));
-    res.status(200).sendFile(path.join(filePath, image));
+    if(image == undefined) {
+        res.status(200).sendFile(path.join(process.cwd(), "assets", "defaultAppImage.png"));
+    } else {
+        res.status(200).sendFile(path.join(filePath, image));
+    }
+});
+
+// requesting app download file using app ID
+router.get("/app_file", checkQuery(["ID"]), async (req, res) => {
+    const {ID} = req.query;
+    const appDataResult = await sqlQuery(res, "SELECT ID_user, app_file FROM applications WHERE ID = ?", [ID]);
+    const filePath = path.join(process.cwd(), "files", `${appDataResult[0].ID_user}`, "apps", `${ID}`);
+    const directory = fs.readdirSync(filePath);
+    const file = directory.find((obj) => obj.startsWith(appDataResult[0].app_file));
+    if(file == undefined) {
+        res.status(404).json({error:"File not found"})
+    } else {
+        res.status(200).sendFile(path.join(filePath, file));
+    }
 });
 
 // requesting application detailed data, also tags and screenshot IDs
@@ -237,6 +256,21 @@ router.post("/upload_application", checkBody(["name", "description", "status"]),
     const {name, description, status} = req.body;
     await sqlQuery(res, "INSERT INTO applications() VALUES(?, ?, NULL, ?, ?, 0, 0, ?)", [nanoID.nanoid(), name, description, DateTime.now().toISO(), status, req.session.userID]);
     res.status(201).json({message:"Inserted successfully"});
+});
+
+// change visibility to public/private
+router.post("/change_public", checkBody(["ID_application", "public"]), async (req, res) => {
+    const {ID_application, public} = req.body;
+    await sqlQuery(res, "UPDATE applications SET public = ? WHERE ID = ? AND ID_user = ?", [public, ID_application, req.session.userID]);
+    // sending notification about uploaded application
+    if(Number(public) == 1) {
+        const usersResult = await sqlQuery(res, "SELECT ID_user FROM subscriptions WHERE notifications != 'none' AND ID_subscribed = ?", [req.session.userID]);
+        const usernameResult = await sqlQuery(res, "SELECT username FROM users WHERE ID = ?", [req.session.userID]);
+        for(const userID in usersResult) {
+            sendNotification(res, `New publish by ${usernameResult[0].username}`, null, userID.ID_user);
+        }
+    }
+    res.status(200).json({message:"Changed successfully"});
 });
 
 
