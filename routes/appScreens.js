@@ -15,6 +15,7 @@ const router = express.Router();
 router.use(authorization());
 
 
+// request specific app screenshot using ID
 router.get("/app_screen", checkQuery(["ID"]), async (req, res) => {
     const {ID} = req.query;
     const IDuserResult = await sqlQuery(res, "SELECT a.ID_user, a.ID as ID_app FROM applications a INNER JOIN app_screens as ON a.ID=as.ID_application WHERE as.ID = ?", [ID]);
@@ -24,6 +25,7 @@ router.get("/app_screen", checkQuery(["ID"]), async (req, res) => {
     res.status(200).sendFile(path.join(filePath, image));
 });
 
+// uploading app screenshots and adding descriptions to specific application using ID_application
 router.post("/upload_app_screens", appScreensUpload.array("files"), checkBody(["descriptions", "ID_application"]), async (req, res) => {
     const {descriptions, ID_application} = req.body;
     if(req.files) {
@@ -41,7 +43,7 @@ router.post("/upload_app_screens", appScreensUpload.array("files"), checkBody(["
     }
 });
 
-
+// update app screenshot description
 router.post("/update_app_screen", checkBody(["ID_application", "ID_app_screen", "description"]), async (req, res) => {
     const {ID_application, ID_app_screen, description} = req.body;
     await sqlQuery(res, "UPDATE app_screens SET description = ? WHERE ID = ? AND ID_application = ?", [description, ID_app_screen, ID_application]);
@@ -49,6 +51,7 @@ router.post("/update_app_screen", checkBody(["ID_application", "ID_app_screen", 
     res.status(200).json({message:"Updated Successfully"})
 });
 
+// delete screenshot using ID_screen
 router.delete("/delete", checkBody(["ID_screen"]), async (req, res) => {
     const {ID_screen} = req.body;
     await sqlQuery(res, "DELETE FROM app_screens WHERE ID = ?", [ID_screen]);

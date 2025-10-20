@@ -23,12 +23,14 @@ const MAX_LINKS_PER_USER = 5;
 
 router.use(authorization());
 
+// request social links of session user
 router.get("/my_links", async (req, res) => {
-    // returns actual logged user social links
-    const userLinksResult = await sqlQuery(res, "SELECT name, href FROM social_links WHERE ID_user = ?", [req.session.userID]);
+    const userLinksResult = await sqlQuery(res, "SELECT ID, name, href FROM social_links WHERE ID_user = ?", [req.session.userID]);
     res.status(200).json({message:"Retrivied socials links", user_social_links:userLinksResult});
 });
 
+
+// adding new link to session user
 router.post("/insert_link", checkBody(["name", "href"]), async (req, res) => {
     const {name, href} = req.body;
     const socialLinkCountResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM social_links WHERE ID_user = ?", [req.session.userID]);
@@ -41,6 +43,7 @@ router.post("/insert_link", checkBody(["name", "href"]), async (req, res) => {
     }
 });
 
+// update session user link by link ID
 router.post("/update_link", checkBody(["ID", "name", "href"]), async (req, res) => {
     const {ID, name, href} = req.body;
     const linkOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM social_links WHERE ID_user = ? AND ID = ?", [req.session.userID, ID]);
@@ -52,6 +55,7 @@ router.post("/update_link", checkBody(["ID", "name", "href"]), async (req, res) 
     }
 });
 
+// delete session user link
 router.delete("/delete_link", checkBody(["ID"]), async (req, res) => {
     const {ID} = req.body;
     const linkOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM social_links WHERE ID_user = ? AND ID = ?", [req.session.userID, ID]);

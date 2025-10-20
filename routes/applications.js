@@ -19,6 +19,7 @@ const router = express.Router();
     endpoints related to mysql applications table
 */
 
+// requesting app image using app ID
 router.get("/app_image", checkQuery(["ID"]), async (req, res) => {
     const {ID} = req.query;
     const IDuserResult = await sqlQuery(res, "SELECT ID_user FROM applications WHERE ID = ?", [ID]);
@@ -28,6 +29,7 @@ router.get("/app_image", checkQuery(["ID"]), async (req, res) => {
     res.status(200).sendFile(path.join(filePath, image));
 });
 
+// requesting application detailed data, also tags and screenshot IDs
 router.get("/app_data", checkQuery(["ID_app"]), async (req, res) => {
     const {ID_app} = req.query;
     const infoResult = await sqlQuery(res, "SELECT name, description, status, public, downloads, app_file FROM applications WHERE ID = ?", [ID_app]);
@@ -41,9 +43,10 @@ router.get("/app_data", checkQuery(["ID_app"]), async (req, res) => {
     }});
 });
 
-router.get("/user_applications", checkQuery(["ID_user","name_filter"]), async (req, res) => {
+// requesting user applications filtered by name_filter
+router.get("/user_applications", checkQuery(["ID_user", "name_filter"]), async (req, res) => {
     const {ID_user, name_filter} = req.query;
-    const applicationsResult = await sqlQuery(res, "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ? AND a.name LIKE ?", [ID_user, `%${name_filter}%`]);
+    const applicationsResult = await sqlQuery(res, "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ? AND a.name LIKE ? ORDER BY a.downloads", [ID_user, `%${name_filter}%`]);
     const finalResult = [];
     applicationsResult.forEach((obj) => {
         const object = finalResult.find((value) => value.ID === obj.ID)
@@ -65,6 +68,7 @@ router.get("/user_applications", checkQuery(["ID_user","name_filter"]), async (r
 });
 
 
+// requesting all applications using specific filters
 router.get("/applications", checkQuery(["username_filter", "name_filter", "status_filter", "tags_filter", "downloads_filter"]), async (req, res) => {
     const {username_filter, name_filter, status_filter, tags_filter, downloads_filter} = req.body;
     let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag, u.ID as userID, u.username FROM applications a INNER JOIN users u ON u.ID=a.ID_user INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.public = 1";
@@ -112,6 +116,7 @@ router.get("/applications", checkQuery(["username_filter", "name_filter", "statu
 
 router.use(authorization());
 
+// requesting subscribed users applications by session user, filtered by specific filters
 router.get("/subscribed_applications", checkQuery(["username_filter", "name_filter", "status_filter", "tags_filter", "downloads_filter"]), async (req, res) => {
     const {username_filter, name_filter, status_filter, tags_filter, downloads_filter} = req.body;
     let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag, u.ID as userID, u.username FROM applications a INNER JOIN users u ON u.ID=a.ID_user INNER JOIN app_tags at ON at.ID_application=a.ID INNER JOIN subscriptions s ON s.ID_subscribed=a.ID_user WHERE s.ID_user = ? AND a.public = 1";
@@ -156,6 +161,7 @@ router.get("/subscribed_applications", checkQuery(["username_filter", "name_filt
     res.status(200).json({message:"Retriviered applications", applications:finalResult});
 });
 
+// requesting session user applications by specific filters
 router.get("/my_applications", checkQuery(["name_filter", "status_filter", "public_filter", "tags_filter", "downloads_filter"]), async (req, res) => {
     // retrive user applications using filters
     const {name_filter, status_filter, public_filter, tags_filter, downloads_filter} = req.query;
@@ -203,6 +209,7 @@ router.get("/my_applications", checkQuery(["name_filter", "status_filter", "publ
     res.status(200).json({message:"Retriviered applications", applications:finalResult});
 });
 
+// uploading application image using ID_application
 router.post("/upload_app_image", appImageUpload.single("file"), async (req, res) => {
     // require req.body.ID_application
     if(req.file) {
@@ -213,6 +220,7 @@ router.post("/upload_app_image", appImageUpload.single("file"), async (req, res)
     }
 });
 
+// uploading application download file using ID_application
 router.post("/upload_app_file", appFileUpload.single("file"), async (req, res) => {
     // require req.body.ID_application
     const {ID_application} = req.body;
@@ -224,13 +232,15 @@ router.post("/upload_app_file", appFileUpload.single("file"), async (req, res) =
     }
 });
 
-
+// request insert application empty sketch
 router.post("/upload_application", checkBody(["name", "description", "status"]), async (req, res) => {
     const {name, description, status} = req.body;
     await sqlQuery(res, "INSERT INTO applications() VALUES(?, ?, NULL, ?, ?, 0, 0, ?)", [nanoID.nanoid(), name, description, DateTime.now().toISO(), status, req.session.userID]);
     res.status(201).json({message:"Inserted successfully"});
 });
 
+
+// update application by ID
 router.post("/update_application", checkBody(["ID", "name", "description", "status"]), async (req, res) => {
     const {ID, name, description, status} = req.body;
     await sqlQuery(res, "UPDATE applications SET name = ?, description = ?, status = ?, update_date = ? WHERE ID = ?", [name, description, status, DateTime.now().toISO(), ID]);

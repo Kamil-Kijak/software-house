@@ -17,6 +17,8 @@ const {profileImageUpload} = require("../utils/multerUploads");
 
 const router = express.Router();
 
+
+// sending email after successfull registration
 function sendRegisterSucceedEmail(email, username) {
     const mailOptions = {
         from:`Software House <${process.env.MAIL_USER || "something@gmail.com"}>`,
@@ -69,11 +71,13 @@ function sendRegisterSucceedEmail(email, username) {
     endpoints related to mysql users table
 */
 
+// sending count of registrated users
 router.get("/registered_count", async (req, res) => {
     const countResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM users", []);
     res.status(200).json({message:"Selected count of registered users", count:countResult[0].count})
 });
 
+// checking if username already exist
 router.get("/username_available", checkQuery(["username"]), async (req, res) => {
     const {username} = req.query;
     const trimmedUsername = username.trim();
@@ -85,6 +89,7 @@ router.get("/username_available", checkQuery(["username"]), async (req, res) => 
     }
 });
 
+// checking if email is available
 router.get("/email_available", checkQuery(["email"]), async (req, res) => {
     const {email} = req.query;
     const emailExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [email]);
@@ -95,6 +100,7 @@ router.get("/email_available", checkQuery(["email"]), async (req, res) => {
     }
 });
 
+// user registration
 router.post("/register_user", checkBody(["email", "username", "country", "password"]), async (req, res) => {
     const {email, username, country, password} = req.body;
     const trimmedUsername = username.trim();
@@ -129,6 +135,7 @@ router.post("/register_user", checkBody(["email", "username", "country", "passwo
     }
 });
 
+// email verification using sended by email code
 router.post("/verify_email", checkBody(["email", "code"]), async (req, res) => {
     const {email, code} = req.body;
     const verifyResult = await sqlQuery(res, "SELECT email, code_hash, expire_date FROM email_verifications WHERE email = ?", [email]);
@@ -150,6 +157,7 @@ router.post("/verify_email", checkBody(["email", "code"]), async (req, res) => {
     }
 });
 
+// user login
 router.post("/login_user", checkBody(["email", "password", "auto_login"]), async (req, res) => {
     const {email, password, auto_login} = req.body;
     const userResult = await sqlQuery(res, "SELECT ID, email, username, password_hash, double_verification FROM users WHERE email = ?", [email]);
@@ -184,6 +192,8 @@ router.post("/login_user", checkBody(["email", "password", "auto_login"]), async
         res.status(400).json({error:"Invalid email"})
     }
 });
+
+// requesting user data by specific ID
 router.get("/user_data/:ID", async (req, res) => {
     const {ID} = req.params;
     const userDataResult = await sqlQuery(res, "SELECT username, country, profile_description FROM users WHERE ID = ?", [ID]);
@@ -199,6 +209,7 @@ router.get("/user_data/:ID", async (req, res) => {
     });
 });
 
+// requesting user profile picture
 router.get("/user_picture/:ID", async (req, res) => {
     const {ID} = req.params;
     getUserPicture(res, ID);
@@ -206,6 +217,7 @@ router.get("/user_picture/:ID", async (req, res) => {
 
 router.use(authorization());
 
+// automatic login at start of the application, where user checked remember me
 router.get("/automatic_login", (req, res) => {
     const session = req.session;
     if(session.auto_login) {
@@ -216,6 +228,7 @@ router.get("/automatic_login", (req, res) => {
     }
 });
 
+// logout user and deleting cookies
 router.get("/logout_user", (req, res) => {
     res.clearCookie("ACCESS_TOKEN");
     res.clearCookie("REFRESH_TOKEN");
@@ -223,6 +236,7 @@ router.get("/logout_user", (req, res) => {
 });
 
 
+// gettting user picture
 const getUserPicture = (res, ID) => {
     const directory = path.join(process.cwd(), "files", ID);
     const responseDefaultProfilePicture = () => {
@@ -248,7 +262,7 @@ const getUserPicture = (res, ID) => {
     }
 }
 
-
+// requesting session user data (from ID in cookie)
 router.get("/my_data", async (req, res) => {
     const userDataResult = await sqlQuery(res, "SELECT username, country, profile_description FROM users WHERE ID = ?", [req.session.userID]);
     const userSocialLinks = await sqlQuery(res, "SELECT name, href FROM social_links WHERE ID_user = ?", [req.session.userID]);
@@ -263,10 +277,12 @@ router.get("/my_data", async (req, res) => {
     });
 });
 
+// requesting session user data (from ID in cookie)
 router.get("/my_picture", async (req, res) => {
     getUserPicture(res, req.session.userID);
 });
 
+// uploading session user profile picture
 router.post("/upload_profile_picture", profileImageUpload.single("file"), async (req, res) => {
     if(!req.file) {
         res.status(400).json({error:"Error with uploading file on the server"});
@@ -275,6 +291,7 @@ router.post("/upload_profile_picture", profileImageUpload.single("file"), async 
 });
 
 
+// email updation on session user
 router.post("/update_email", checkBody(["new_email", "password"]), async (req, res) => {
     const {new_email, password} = req.body;
     const emailExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM users WHERE email = ?", [new_email]);
@@ -291,6 +308,7 @@ router.post("/update_email", checkBody(["new_email", "password"]), async (req, r
     }
 });
 
+// password updation on session user
 router.post("/update_password", checkBody(["new_password"]), async (req, res) => {
     const {new_password} = req.body;
     const actualUserResult = await sqlQuery(res, "SELECT email FROM users WHERE ID = ?", [req.session.userID]);
@@ -308,10 +326,10 @@ router.post("/update_password", checkBody(["new_password"]), async (req, res) =>
         await sqlQuery(res, "UPDATE users SET password_hash = ? WHERE ID = ?", [newPasswordHash, req.session.userID]);
         res.status(200).json({message:"Password update succeed"})
     }
-})
+});
 
 
-
+// request profile update on session user
 router.post("/update_profile", checkBody(["username", "country", "double_verification", "profile_description"]), async (req, res) => {
     const {username, country, double_verification, profile_description} = req.body;
     const trimmedUsername = username.trim();
@@ -324,6 +342,8 @@ router.post("/update_profile", checkBody(["username", "country", "double_verific
     }
 });
 
+
+// request profile delete (protected using password)
 router.delete("/delete_profile", checkBody(["password"]), async (req, res) => {
     const {password} = req.body;
     const userResult = await sqlQuery(res, "SELECT password_hash FROM users WHERE ID = ?", [req.session.userID]);
@@ -340,6 +360,6 @@ router.delete("/delete_profile", checkBody(["password"]), async (req, res) => {
     } else {
         res.status(404).json({error:"User not found"});
     }
-})
+});
 
 module.exports = router;

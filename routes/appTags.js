@@ -18,6 +18,7 @@ const MAX_TAGS_PER_APP = 10;
 */
 
 
+// request available tags filtered by name
 router.get("/available_tags", checkQuery(["name"]), async (req, res) => {
     const {name} = req.query;
     const availabletagsResult = await sqlQuery(res, "SELECT COUNT(ID) as count, name FROM app_tags WHERE name LIKE ? GROUP BY name", [`${name}%`]);
@@ -26,6 +27,7 @@ router.get("/available_tags", checkQuery(["name"]), async (req, res) => {
 
 router.use(authorization());
 
+// request insertion many tags to specific application by ID_application
 router.post("/insert_many", checkBody(["ID_application", "tags"]), async (req, res) => {
     const {ID_application, tags} = req.body;
     const appTagsResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM app_tags WHERE ID_application = ?", [ID_application]);
@@ -39,7 +41,8 @@ router.post("/insert_many", checkBody(["ID_application", "tags"]), async (req, r
     res.status(201).json({massage:"Inserted many tags"});
 });
 
-router.post("/update_many", checkBody(["ID_tag", "name"]), async (req, res) => {
+// request many tags updation using ID_tag in ID_tags
+router.post("/update_many", checkBody(["ID_tags", "name"]), async (req, res) => {
     const {ID_tags, names} = req.body;
     const tagsIDArray = [...ID_tags];
     const namesArray = [...names];
@@ -52,6 +55,7 @@ router.post("/update_many", checkBody(["ID_tag", "name"]), async (req, res) => {
     res.status(200).json({message:"Updated successfully"});
 });
 
+// request delete one tag using ID_tag
 router.delete("/delete_tag", checkBody(["ID_tag"]), async (req, res) => {
     const {ID_tag} = req.body;
     await sqlQuery(res, "DELETE FROM app_tags WHERE ID = ?", [ID_tag]);
