@@ -78,7 +78,7 @@ router.post("/toggle_subscription", checkBody(["ID_user"]), async (req, res) => 
 });
 
 // update notifications settings
-router.post("/update_subscription", checkBody(["ID_user", "notifications"]), async (req, res) => {
+router.put("/update_subscription", checkBody(["ID_user", "notifications"]), async (req, res) => {
     const {ID_user, notifications} = req.body;
     await sqlQuery(res, "UPDATE subscriptions SET notifications = ? WHERE ID_user = ? AND ID_subscribed = ?", [notifications, req.session.userID, ID_user]);
     res.status(200).json({message:"Subscription update succeed"})

@@ -32,7 +32,7 @@ router.get("/opinions", checkQuery(["ID_application", "username_filter", "rating
 router.use(authorization());
 
 // request insert session user new opinion to the app
-router.post("/insert", checkBody(["ID_application", "rating", "comment"]), async (req, res) => {
+router.post("/insert_opinion", checkBody(["ID_application", "rating", "comment"]), async (req, res) => {
     const {ID_application, rating, comment} = req.body;
     // checking if this user opinion exist
     const opinionExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM opinions WHERE ID_user = ? AND ID_application = ?", [req.session.userID, ID_application]);
@@ -45,14 +45,14 @@ router.post("/insert", checkBody(["ID_application", "rating", "comment"]), async
 });
 
 // request update session user opinion
-router.post("/update", checkBody(["ID_opinion", "rating", "comment"]), async (req, res) => {
+router.put("/update_opinion", checkBody(["ID_opinion", "rating", "comment"]), async (req, res) => {
     const {ID_opinion, rating, comment} = req.body;
     await sqlQuery(res, "UPDATE opinion SET rating = ?, comment = ?, upload_date = ?, edited = 1 WHERE ID = ?", [rating, comment, DateTime.now().toISO(), ID_opinion]);
     res.status(200).json({message:"Update succeed"});
 });
 
 // request opinion deletion using ID_opinion
-router.delete("/delete", checkBody(["ID_opinion"]), async (req, res) => {
+router.delete("/delete_opinion", checkBody(["ID_opinion"]), async (req, res) => {
     const {ID_opinion} = req.body;
     await sqlQuery(res, "DELETE FROM opinions WHERE ID = ?", [ID_opinion]);
     res.status(200).json({message:"Deleted successfully"});

@@ -44,7 +44,7 @@ router.post("/upload_app_screens", appScreensUpload.array("files"), checkBody(["
 });
 
 // update app screenshot description
-router.post("/update_app_screen", checkBody(["ID_application", "ID_app_screen", "description"]), async (req, res) => {
+router.put("/update_app_screen", checkBody(["ID_application", "ID_app_screen", "description"]), async (req, res) => {
     const {ID_application, ID_app_screen, description} = req.body;
     await sqlQuery(res, "UPDATE app_screens SET description = ? WHERE ID = ? AND ID_application = ?", [description, ID_app_screen, ID_application]);
     await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.now().toISO(), ID_application])

@@ -44,7 +44,7 @@ router.post("/insert_link", checkBody(["name", "href"]), async (req, res) => {
 });
 
 // update session user link by link ID
-router.post("/update_link", checkBody(["ID", "name", "href"]), async (req, res) => {
+router.put("/update_link", checkBody(["ID", "name", "href"]), async (req, res) => {
     const {ID, name, href} = req.body;
     const linkOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM social_links WHERE ID_user = ? AND ID = ?", [req.session.userID, ID]);
     if(linkOwnershipResult[0].count >= 1) {

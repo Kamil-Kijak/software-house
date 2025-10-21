@@ -292,7 +292,7 @@ router.post("/upload_profile_picture", profileImageUpload.single("file"), async 
 
 
 // email updation on session user
-router.post("/update_email", checkBody(["new_email", "password"]), async (req, res) => {
+router.put("/update_email", checkBody(["new_email", "password"]), async (req, res) => {
     const {new_email, password} = req.body;
     const emailExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM users WHERE email = ?", [new_email]);
     if(emailExistResult[0].count == 0) {
@@ -309,7 +309,7 @@ router.post("/update_email", checkBody(["new_email", "password"]), async (req, r
 });
 
 // password updation on session user
-router.post("/update_password", checkBody(["new_password"]), async (req, res) => {
+router.put("/update_password", checkBody(["new_password"]), async (req, res) => {
     const {new_password} = req.body;
     const actualUserResult = await sqlQuery(res, "SELECT email FROM users WHERE ID = ?", [req.session.userID]);
     const email = actualUserResult[0].email;
@@ -330,7 +330,7 @@ router.post("/update_password", checkBody(["new_password"]), async (req, res) =>
 
 
 // request profile update on session user
-router.post("/update_profile", checkBody(["username", "country", "double_verification", "profile_description"]), async (req, res) => {
+router.put("/update_profile", checkBody(["username", "country", "double_verification", "profile_description"]), async (req, res) => {
     const {username, country, double_verification, profile_description} = req.body;
     const trimmedUsername = username.trim();
     const usernameExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [trimmedUsername]);

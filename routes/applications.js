@@ -308,7 +308,7 @@ router.post("/upload_application", checkBody(["name", "description", "status"]),
 });
 
 // change visibility to public/private
-router.post("/change_public", checkBody(["ID_application", "public"]), async (req, res) => {
+router.put("/change_public", checkBody(["ID_application", "public"]), async (req, res) => {
     const {ID_application, public} = req.body;
     await sqlQuery(res, "UPDATE applications SET public = ? WHERE ID = ? AND ID_user = ?", [public, ID_application, req.session.userID]);
     // sending notification about uploaded application
@@ -324,7 +324,7 @@ router.post("/change_public", checkBody(["ID_application", "public"]), async (re
 
 
 // update application by ID
-router.post("/update_application", checkBody(["ID", "name", "description", "status"]), async (req, res) => {
+router.put("/update_application", checkBody(["ID", "name", "description", "status"]), async (req, res) => {
     const {ID, name, description, status} = req.body;
     await sqlQuery(res, "UPDATE applications SET name = ?, description = ?, status = ?, update_date = ? WHERE ID = ?", [name, description, status, DateTime.now().toISO(), ID]);
     res.status(200).json({message:"Updated successfully"});

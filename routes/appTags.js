@@ -42,7 +42,7 @@ router.post("/insert_many", checkBody(["ID_application", "tags"]), async (req, r
 });
 
 // request many tags updation using ID_tag in ID_tags
-router.post("/update_many", checkBody(["ID_tags", "name"]), async (req, res) => {
+router.put("/update_many", checkBody(["ID_tags", "name"]), async (req, res) => {
     const {ID_tags, names} = req.body;
     const tagsIDArray = [...ID_tags];
     const namesArray = [...names];
