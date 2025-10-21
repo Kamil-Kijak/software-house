@@ -71,6 +71,7 @@ CREATE TABLE `opinions` (
     `ID_application` CHAR(21) NOT NULL,
     `rating` INT NOT NULL DEFAULT 5,
     `upload_date` CHAR(29) NOT NULL,
+    `edited` BOOLEAN NOT NULL DEFAULT 0,
     `comment` TEXT DEFAULT NULL,
     CHECK (`rating` BETWEEN 1 AND 5),
     INDEX idx_application (ID_application),
