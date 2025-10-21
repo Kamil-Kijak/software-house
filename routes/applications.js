@@ -55,17 +55,22 @@ router.get("/app_data", checkQuery(["ID_app"]), async (req, res) => {
     const tagsResult = await sqlQuery(res, "SELECT name FROM app_tags WHERE ID_application = ?", [ID_app]);
     const tagsArray = tagsResult.map((obj) => obj.name);
     const screensResult = await sqlQuery(res, "SELECT ID, description FROM app_screens WHERE ID_application = ?", [ID_app]);
+    const opinionsAvgResult = await sqlQuery(res, "SELECT AVG(rating) as avg FROM opinions WHERE ID_application = ?", [ID_app]);
     res.status(200).json({message:"Retriviered app data", application:{
         ...infoResult[0],
         tags:tagsArray,
-        screens:screensResult
+        screens:screensResult,
+        rating:opinionsAvgResult[0].avg || 0
     }});
 });
 
 // requesting user applications filtered by name_filter
 router.get("/user_applications", checkQuery(["ID_user", "name_filter"]), async (req, res) => {
     const {ID_user, name_filter} = req.query;
-    const applicationsResult = await sqlQuery(res, "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ? AND a.name LIKE ? ORDER BY a.downloads", [ID_user, `%${name_filter}%`]);
+    const applicationsResult = await sqlQuery(res, "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ? AND a.name LIKE ? ORDER BY a.downloads DESC", [ID_user, `%${name_filter}%`]);
+    const appRatingAvgResult = await sqlQuery(res, "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application WHERE a.ID_user = ? AND a.name LIKE ? GROUP BY a.ID", [ID_user, `%${name_filter}%`]);
+    const ratingAverages = {};
+    appRatingAvgResult.forEach((obj) => ratingAverages[obj.ID] = obj.rating);
     const finalResult = [];
     applicationsResult.forEach((obj) => {
         const object = finalResult.find((value) => value.ID === obj.ID)
@@ -77,6 +82,7 @@ router.get("/user_applications", checkQuery(["ID_user", "name_filter"]), async (
                 public:obj.public,
                 downloads:obj.downloads,
                 description:obj.description,
+                rating:ratingAverages[obj.ID] || 0,
                 tags:[obj.tag]
             });
         } else {
@@ -91,7 +97,9 @@ router.get("/user_applications", checkQuery(["ID_user", "name_filter"]), async (
 router.get("/applications", checkQuery(["username_filter", "name_filter", "status_filter", "tags_filter", "downloads_filter"]), async (req, res) => {
     const {username_filter, name_filter, status_filter, tags_filter, downloads_filter} = req.body;
     let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag, u.ID as userID, u.username FROM applications a INNER JOIN users u ON u.ID=a.ID_user INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.public = 1";
-    const params = [req.session.userID];
+    let ratingsSqlString = "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application INNER JOIN users u u.ID=a.ID_user WHERE a.public = 1 AND a.name LIKE ?";
+    const params = [];
+    const ratingsParams = [`%${name_filter}%`];
     if(tags_filter) {
         if(tags_filter.length > 0) {
             sqlString+= ` AND at.name IN (${tags_filter.map(obj => "?").join(", ")})`;
@@ -100,17 +108,28 @@ router.get("/applications", checkQuery(["username_filter", "name_filter", "statu
     }
     if(status_filter) {
         sqlString+=" AND a.status = ?";
+        ratingsSqlString += " AND a.status = ?";
         params.push(status_filter);
+        ratingsParams.push(status_filter);
     }
     sqlString+=" AND a.name LIKE ? AND u.username LIKE ?";
     params.push(`%${name_filter}%`, `%${username_filter}%`);
+
+    ratingsSqlString+= " AND u.username LIKE ?";
+    params.push(`%${username_filter}%`);
+
     if(downloads_filter) {
-        sqlString+=" ORDER BY a.downloads DESC";
-    } else {
         sqlString+=" ORDER BY a.downloads";
+    } else {
+        sqlString+=" ORDER BY a.downloads DESC";
     }
     sqlString += " LIMIT 200";
+    ratingsSqlString += " GROUP BY a.ID";
     const applicationsResult = await sqlQuery(res, sqlString, params);
+    const appRatingAvgResult = await sqlQuery(res, ratingsSqlString, ratingsParams);
+
+    const ratingAverages = {};
+    appRatingAvgResult.forEach((obj) => ratingAverages[obj.ID] = obj.rating);
     const finalResult = [];
     applicationsResult.forEach((obj) => {
         const object = finalResult.find((value) => value.ID === obj.ID)
@@ -124,6 +143,7 @@ router.get("/applications", checkQuery(["username_filter", "name_filter", "statu
                 description:obj.description,
                 userID:obj.userID,
                 username:obj.username,
+                rating:ratingAverages[obj.ID] || 0,
                 tags:[obj.tag]
             });
         } else {
@@ -139,7 +159,10 @@ router.use(authorization());
 router.get("/subscribed_applications", checkQuery(["username_filter", "name_filter", "status_filter", "tags_filter", "downloads_filter"]), async (req, res) => {
     const {username_filter, name_filter, status_filter, tags_filter, downloads_filter} = req.body;
     let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag, u.ID as userID, u.username FROM applications a INNER JOIN users u ON u.ID=a.ID_user INNER JOIN app_tags at ON at.ID_application=a.ID INNER JOIN subscriptions s ON s.ID_subscribed=a.ID_user WHERE s.ID_user = ? AND a.public = 1";
+    let ratingsSqlString = "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application INNER JOIN users u u.ID=a.ID_user INNER JOIN subscriptions s ON s.ID_subscribed=a.ID_user WHERE a.public = 1 AND s.ID_user = ?";
+    
     const params = [req.session.userID];
+    const ratingsParams = [req.session.userID];
     if(tags_filter) {
         if(tags_filter.length > 0) {
             sqlString+= ` AND at.name IN (${tags_filter.map(obj => "?").join(", ")})`;
@@ -149,15 +172,25 @@ router.get("/subscribed_applications", checkQuery(["username_filter", "name_filt
     if(status_filter) {
         sqlString+=" AND a.status = ?";
         params.push(status_filter);
+        ratingsSqlString+= " AND a.status = ?";
+        ratingsParams.push(status_filter);
     }
     sqlString+=" AND a.name LIKE ? AND u.username LIKE ?";
     params.push(`%${name_filter}%`, `%${username_filter}%`);
+
+    ratingsSqlString+= " AND a.name LIKE ? AND u.username LIKE ?";
+    ratingsParams.push(`%${name_filter}%`, `%${username_filter}%`);
     if(downloads_filter) {
-        sqlString+=" ORDER BY a.downloads DESC";
-    } else {
         sqlString+=" ORDER BY a.downloads";
+    } else {
+        sqlString+=" ORDER BY a.downloads DESC";
     }
+    ratingsSqlString += " GROUP BY a.ID";
     const applicationsResult = await sqlQuery(res, sqlString, params);
+    const appRatingAvgResult = await sqlQuery(res, ratingsSqlString, ratingsParams);
+
+    const ratingAverages = {};
+    appRatingAvgResult.forEach((obj) => ratingAverages[obj.ID] = obj.rating);
     const finalResult = [];
     applicationsResult.forEach((obj) => {
         const object = finalResult.find((value) => value.ID === obj.ID)
@@ -171,6 +204,7 @@ router.get("/subscribed_applications", checkQuery(["username_filter", "name_filt
                 description:obj.description,
                 userID:obj.userID,
                 username:obj.username,
+                rating:ratingAverages[obj.ID] || 0,
                 tags:[obj.tag]
             });
         } else {
@@ -184,8 +218,10 @@ router.get("/subscribed_applications", checkQuery(["username_filter", "name_filt
 router.get("/my_applications", checkQuery(["name_filter", "status_filter", "public_filter", "tags_filter", "downloads_filter"]), async (req, res) => {
     // retrive user applications using filters
     const {name_filter, status_filter, public_filter, tags_filter, downloads_filter} = req.query;
-    let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ?"
+    let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ?";
+    let ratingsSqlString = "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application WHERE a.ID_user = ?";
     const params = [req.session.userID];
+    const ratingsParams = [req.session.userID];
     if(tags_filter) {
         if(tags_filter.length > 0) {
             sqlString+= ` AND at.name IN (${tags_filter.map(obj => "?").join(", ")})`;
@@ -195,19 +231,31 @@ router.get("/my_applications", checkQuery(["name_filter", "status_filter", "publ
     if(public_filter) {
         sqlString+=" AND a.public = ?";
         params.push(public_filter);
+        ratingsSqlString+= " AND a.public = ?";
+        ratingsParams.push(public_filter);
     }
     if(status_filter) {
         sqlString+=" AND a.status = ?";
         params.push(status_filter);
+        ratingsSqlString+= " AND a.status = ?";
+        ratingsParams.push(status_filter);
     }
     sqlString+=" AND a.name LIKE ?";
     params.push(`%${name_filter}%`);
+
+    ratingsSqlString+= " AND a.name LIKE ?";
+    ratingsParams.push(`%${name_filter}%`);
+
     if(downloads_filter) {
-        sqlString+=" ORDER BY a.downloads DESC";
-    } else {
         sqlString+=" ORDER BY a.downloads";
+    } else {
+        sqlString+=" ORDER BY a.downloads DESC";
     }
     const applicationsResult = await sqlQuery(res, sqlString, params);
+    const appRatingAvgResult = await sqlQuery(res, ratingsSqlString, ratingsParams);
+
+    const ratingAverages = {};
+    appRatingAvgResult.forEach((obj) => ratingAverages[obj.ID] = obj.rating);
     const finalResult = [];
     applicationsResult.forEach((obj) => {
         const object = finalResult.find((value) => value.ID === obj.ID)
@@ -219,6 +267,7 @@ router.get("/my_applications", checkQuery(["name_filter", "status_filter", "publ
                 public:obj.public,
                 downloads:obj.downloads,
                 description:obj.description,
+                rating:ratingAverages[obj.ID] || 0,
                 tags:[obj.tag]
             });
         } else {
