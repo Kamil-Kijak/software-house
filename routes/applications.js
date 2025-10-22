@@ -294,6 +294,9 @@ router.post("/upload_app_file", appFileUpload.single("file"), async (req, res) =
     const {ID_application} = req.body;
     if(req.file) {
         await sqlQuery(res, "UPDATE applications SET app_file = ?, update_date = ? WHERE ID = ?", [req.file.filename, DateTime.now().toISO(), ID_application]);
+        if(Number(process.env.CONSOLE_LOGS)) {
+            console.log(`Uploaded app file, ID app ${ID_application}`);
+        }
         res.status(200).json({message:"Uploading succeed"});
     } else {
         res.status(400).json({error:"Uploading failed"})
@@ -303,7 +306,11 @@ router.post("/upload_app_file", appFileUpload.single("file"), async (req, res) =
 // request insert application empty sketch
 router.post("/upload_application", checkBody(["name", "description", "status"]), async (req, res) => {
     const {name, description, status} = req.body;
-    await sqlQuery(res, "INSERT INTO applications() VALUES(?, ?, NULL, ?, ?, 0, 0, ?)", [nanoID.nanoid(), name, description, DateTime.now().toISO(), status, req.session.userID]);
+    const ID = nanoID.nanoid();
+    await sqlQuery(res, "INSERT INTO applications() VALUES(?, ?, NULL, ?, ?, 0, 0, ?)", [ID, name, description, DateTime.now().toISO(), status, req.session.userID]);
+    if(Number(process.env.CONSOLE_LOGS)) {
+        console.log(`Upload app file, ID app ${ID}`);
+    }
     res.status(201).json({message:"Inserted successfully"});
 });
 
@@ -317,6 +324,9 @@ router.put("/change_public", checkBody(["ID_application", "public"]), async (req
         const usernameResult = await sqlQuery(res, "SELECT username FROM users WHERE ID = ?", [req.session.userID]);
         for(const userID in usersResult) {
             sendNotification(res, `New publish by ${usernameResult[0].username}`, null, userID.ID_user);
+        }
+        if(Number(process.env.CONSOLE_LOGS)) {
+            console.log(`New publish ID app ${ID_application}`);
         }
     }
     res.status(200).json({message:"Changed successfully"});
