@@ -21,10 +21,10 @@ const router = express.Router();
 */
 
 // requesting app image using app ID
-router.get("/app_image", checkQuery(["ID"]), async (req, res) => {
-    const {ID} = req.query;
-    const IDuserResult = await sqlQuery(res, "SELECT ID_user FROM applications WHERE ID = ?", [ID]);
-    const filePath = path.join(process.cwd(), "files", `${IDuserResult[0].ID_user}`, "apps", `${ID}`);
+router.get("/app_image", checkQuery(["IDApplication"]), async (req, res) => {
+    const {IDApplication} = req.query;
+    const IDuserResult = await sqlQuery(res, "SELECT ID_user FROM applications WHERE ID = ?", [IDApplication]);
+    const filePath = path.join(process.cwd(), "files", `${IDuserResult[0].ID_user}`, "apps", `${IDApplication}`);
     const directory = fs.readdirSync(filePath);
     const image = directory.find((obj) => obj.startsWith("app."));
     if(image == undefined) {
@@ -35,10 +35,10 @@ router.get("/app_image", checkQuery(["ID"]), async (req, res) => {
 });
 
 // requesting app download file using app ID
-router.get("/app_file", checkQuery(["ID"]), async (req, res) => {
-    const {ID} = req.query;
-    const appDataResult = await sqlQuery(res, "SELECT ID_user, app_file FROM applications WHERE ID = ?", [ID]);
-    const filePath = path.join(process.cwd(), "files", `${appDataResult[0].ID_user}`, "apps", `${ID}`);
+router.get("/app_file", checkQuery(["IDApplication"]), async (req, res) => {
+    const {IDApplication} = req.query;
+    const appDataResult = await sqlQuery(res, "SELECT ID_user, app_file FROM applications WHERE ID = ?", [IDApplication]);
+    const filePath = path.join(process.cwd(), "files", `${appDataResult[0].ID_user}`, "apps", `${IDApplication}`);
     const directory = fs.readdirSync(filePath);
     const file = directory.find((obj) => obj.startsWith(appDataResult[0].app_file));
     if(file == undefined) {
@@ -49,13 +49,13 @@ router.get("/app_file", checkQuery(["ID"]), async (req, res) => {
 });
 
 // requesting application detailed data, also tags and screenshot IDs
-router.get("/app_data", checkQuery(["ID_app"]), async (req, res) => {
-    const {ID_app} = req.query;
-    const infoResult = await sqlQuery(res, "SELECT name, description, status, public, downloads, app_file FROM applications WHERE ID = ?", [ID_app]);
-    const tagsResult = await sqlQuery(res, "SELECT name FROM app_tags WHERE ID_application = ?", [ID_app]);
+router.get("/app_data", checkQuery(["IDApplication"]), async (req, res) => {
+    const {IDApplication} = req.query;
+    const infoResult = await sqlQuery(res, "SELECT name, description, status, public, downloads, app_file FROM applications WHERE ID = ?", [IDApplication]);
+    const tagsResult = await sqlQuery(res, "SELECT name FROM app_tags WHERE ID_application = ?", [IDApplication]);
     const tagsArray = tagsResult.map((obj) => obj.name);
-    const screensResult = await sqlQuery(res, "SELECT ID, description FROM app_screens WHERE ID_application = ?", [ID_app]);
-    const opinionsAvgResult = await sqlQuery(res, "SELECT AVG(rating) as avg FROM opinions WHERE ID_application = ?", [ID_app]);
+    const screensResult = await sqlQuery(res, "SELECT ID, description FROM app_screens WHERE ID_application = ?", [IDApplication]);
+    const opinionsAvgResult = await sqlQuery(res, "SELECT AVG(rating) as avg FROM opinions WHERE ID_application = ?", [IDApplication]);
     res.status(200).json({message:"Retriviered app data", application:{
         ...infoResult[0],
         tags:tagsArray,
@@ -65,10 +65,10 @@ router.get("/app_data", checkQuery(["ID_app"]), async (req, res) => {
 });
 
 // requesting user applications filtered by name_filter
-router.get("/user_applications", checkQuery(["ID_user", "name_filter"]), async (req, res) => {
-    const {ID_user, name_filter} = req.query;
-    const applicationsResult = await sqlQuery(res, "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ? AND a.name LIKE ? ORDER BY a.downloads DESC", [ID_user, `%${name_filter}%`]);
-    const appRatingAvgResult = await sqlQuery(res, "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application WHERE a.ID_user = ? AND a.name LIKE ? GROUP BY a.ID", [ID_user, `%${name_filter}%`]);
+router.get("/user_applications", checkQuery(["IDuser", "nameFilter", "limit"]), async (req, res) => {
+    const {IDUser, nameFilter, limit} = req.query;
+    const applicationsResult = await sqlQuery(res, "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ? AND a.name LIKE ? ORDER BY a.downloads DESC", [IDUser, `%${nameFilter}%`, limit || 200]);
+    const appRatingAvgResult = await sqlQuery(res, "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application WHERE a.ID_user = ? AND a.name LIKE ? GROUP BY a.ID ORDER BY a.downloads DESC LIMIT ?", [IDUser, `%${nameFilter}%`, limit || 200]);
     const ratingAverages = {};
     appRatingAvgResult.forEach((obj) => ratingAverages[obj.ID] = obj.rating);
     const finalResult = [];
@@ -78,7 +78,7 @@ router.get("/user_applications", checkQuery(["ID_user", "name_filter"]), async (
             finalResult.push({
                 ID:obj.ID,
                 name:obj.name,
-                update_date:obj.update_date,
+                updateDate:obj.update_date,
                 public:obj.public,
                 downloads:obj.downloads,
                 description:obj.description,
@@ -94,37 +94,42 @@ router.get("/user_applications", checkQuery(["ID_user", "name_filter"]), async (
 
 
 // requesting all applications using specific filters
-router.get("/applications", checkQuery(["username_filter", "name_filter", "status_filter", "tags_filter", "downloads_filter"]), async (req, res) => {
-    const {username_filter, name_filter, status_filter, tags_filter, downloads_filter} = req.body;
+router.get("/applications", checkQuery(["usernameFilter", "nameFilter", "statusFilter", "tagsFilter", "downloadsFilter", "limit"]), async (req, res) => {
+    const {usernameFilter, nameFilter, statusFilter, tagsFilter, downloadsFilter, limit} = req.body;
     let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag, u.ID as userID, u.username FROM applications a INNER JOIN users u ON u.ID=a.ID_user INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.public = 1";
     let ratingsSqlString = "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application INNER JOIN users u u.ID=a.ID_user WHERE a.public = 1 AND a.name LIKE ?";
     const params = [];
-    const ratingsParams = [`%${name_filter}%`];
-    if(tags_filter) {
-        if(tags_filter.length > 0) {
-            sqlString+= ` AND at.name IN (${tags_filter.map(obj => "?").join(", ")})`;
-            params.push(...tags_filter);
+    const ratingsParams = [`%${nameFilter}%`];
+    if(tagsFilter) {
+        if(tagsFilter.length > 0) {
+            sqlString+= ` AND at.name IN (${tagsFilter.map(obj => "?").join(", ")})`;
+            params.push(...tagsFilter);
         }
     }
-    if(status_filter) {
+    if(statusFilter) {
         sqlString+=" AND a.status = ?";
         ratingsSqlString += " AND a.status = ?";
-        params.push(status_filter);
-        ratingsParams.push(status_filter);
+        params.push(statusFilter);
+        ratingsParams.push(statusFilter);
     }
     sqlString+=" AND a.name LIKE ? AND u.username LIKE ?";
-    params.push(`%${name_filter}%`, `%${username_filter}%`);
+    params.push(`%${nameFilter}%`, `%${usernameFilter}%`);
 
     ratingsSqlString+= " AND u.username LIKE ?";
-    params.push(`%${username_filter}%`);
+    params.push(`%${usernameFilter}%`);
 
-    if(downloads_filter) {
+    ratingsSqlString += " GROUP BY a.ID";
+    if(downloadsFilter) {
         sqlString+=" ORDER BY a.downloads";
+        ratingsSqlString +=" ORDER BY a.downloads";
     } else {
         sqlString+=" ORDER BY a.downloads DESC";
+        ratingsSqlString +=" ORDER BY a.downloads DESC";
     }
-    sqlString += " LIMIT 200";
-    ratingsSqlString += " GROUP BY a.ID";
+    sqlString += " LIMIT ?";
+    params.push(limit || 200);
+    ratingsSqlString += " LIMIT ?";
+    ratingsParams.push(limit || 200);
     const applicationsResult = await sqlQuery(res, sqlString, params);
     const appRatingAvgResult = await sqlQuery(res, ratingsSqlString, ratingsParams);
 
@@ -137,7 +142,7 @@ router.get("/applications", checkQuery(["username_filter", "name_filter", "statu
             finalResult.push({
                 ID:obj.ID,
                 name:obj.name,
-                update_date:obj.update_date,
+                updateDate:obj.update_date,
                 public:obj.public,
                 downloads:obj.downloads,
                 description:obj.description,
@@ -156,36 +161,43 @@ router.get("/applications", checkQuery(["username_filter", "name_filter", "statu
 router.use(authorization());
 
 // requesting subscribed users applications by session user, filtered by specific filters
-router.get("/subscribed_applications", checkQuery(["username_filter", "name_filter", "status_filter", "tags_filter", "downloads_filter"]), async (req, res) => {
-    const {username_filter, name_filter, status_filter, tags_filter, downloads_filter} = req.body;
+router.get("/subscribed_applications", checkQuery(["usernameFilter", "nameFilter", "statusFilter", "tagsFilter", "downloadsFilter", "limit"]), async (req, res) => {
+    const {usernameFilter, nameFilter, statusFilter, tagsFilter, downloadsFilter, limit} = req.body;
     let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag, u.ID as userID, u.username FROM applications a INNER JOIN users u ON u.ID=a.ID_user INNER JOIN app_tags at ON at.ID_application=a.ID INNER JOIN subscriptions s ON s.ID_subscribed=a.ID_user WHERE s.ID_user = ? AND a.public = 1";
     let ratingsSqlString = "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application INNER JOIN users u u.ID=a.ID_user INNER JOIN subscriptions s ON s.ID_subscribed=a.ID_user WHERE a.public = 1 AND s.ID_user = ?";
     
     const params = [req.session.userID];
     const ratingsParams = [req.session.userID];
-    if(tags_filter) {
-        if(tags_filter.length > 0) {
-            sqlString+= ` AND at.name IN (${tags_filter.map(obj => "?").join(", ")})`;
-            params.push(...tags_filter);
+    if(tagsFilter) {
+        if(tagsFilter.length > 0) {
+            sqlString+= ` AND at.name IN (${tagsFilter.map(obj => "?").join(", ")})`;
+            params.push(...tagsFilter);
         }
     }
-    if(status_filter) {
+    if(statusFilter) {
         sqlString+=" AND a.status = ?";
-        params.push(status_filter);
+        params.push(statusFilter);
         ratingsSqlString+= " AND a.status = ?";
-        ratingsParams.push(status_filter);
+        ratingsParams.push(statusFilter);
     }
     sqlString+=" AND a.name LIKE ? AND u.username LIKE ?";
-    params.push(`%${name_filter}%`, `%${username_filter}%`);
+    params.push(`%${nameFilter}%`, `%${usernameFilter}%`);
 
     ratingsSqlString+= " AND a.name LIKE ? AND u.username LIKE ?";
-    ratingsParams.push(`%${name_filter}%`, `%${username_filter}%`);
-    if(downloads_filter) {
+    ratingsParams.push(`%${nameFilter}%`, `%${usernameFilter}%`);
+    ratingsSqlString += " GROUP BY a.ID";
+    if(downloadsFilter) {
         sqlString+=" ORDER BY a.downloads";
+        ratingsSqlString +=" ORDER BY a.downloads";
     } else {
         sqlString+=" ORDER BY a.downloads DESC";
+        ratingsSqlString +=" ORDER BY a.downloads DESC";
     }
-    ratingsSqlString += " GROUP BY a.ID";
+
+    sqlString += " LIMIT ?";
+    params.push(limit || 200);
+    ratingsSqlString += " LIMIT ?";
+    ratingsParams.push(limit || 200);
     const applicationsResult = await sqlQuery(res, sqlString, params);
     const appRatingAvgResult = await sqlQuery(res, ratingsSqlString, ratingsParams);
 
@@ -198,7 +210,7 @@ router.get("/subscribed_applications", checkQuery(["username_filter", "name_filt
             finalResult.push({
                 ID:obj.ID,
                 name:obj.name,
-                update_date:obj.update_date,
+                updateDate:obj.update_date,
                 public:obj.public,
                 downloads:obj.downloads,
                 description:obj.description,
@@ -215,42 +227,50 @@ router.get("/subscribed_applications", checkQuery(["username_filter", "name_filt
 });
 
 // requesting session user applications by specific filters
-router.get("/my_applications", checkQuery(["name_filter", "status_filter", "public_filter", "tags_filter", "downloads_filter"]), async (req, res) => {
+router.get("/my_applications", checkQuery(["usernameFilter", "nameFilter", "statusFilter", "tagsFilter", "downloadsFilter", "limit"]), async (req, res) => {
     // retrive user applications using filters
-    const {name_filter, status_filter, public_filter, tags_filter, downloads_filter} = req.query;
+    const {nameFilter, statusFilter, publicFilter, tagsFilter, downloadsFilter} = req.query;
     let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ?";
     let ratingsSqlString = "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application WHERE a.ID_user = ?";
     const params = [req.session.userID];
     const ratingsParams = [req.session.userID];
-    if(tags_filter) {
-        if(tags_filter.length > 0) {
-            sqlString+= ` AND at.name IN (${tags_filter.map(obj => "?").join(", ")})`;
-            params.push(...tags_filter);
+    if(tagsFilter) {
+        if(tagsFilter.length > 0) {
+            sqlString+= ` AND at.name IN (${tagsFilter.map(obj => "?").join(", ")})`;
+            params.push(...tagsFilter);
         }
     }
-    if(public_filter) {
+    if(publicFilter) {
         sqlString+=" AND a.public = ?";
-        params.push(public_filter);
+        params.push(publicFilter);
         ratingsSqlString+= " AND a.public = ?";
-        ratingsParams.push(public_filter);
+        ratingsParams.push(publicFilter);
     }
-    if(status_filter) {
+    if(statusFilter) {
         sqlString+=" AND a.status = ?";
-        params.push(status_filter);
+        params.push(statusFilter);
         ratingsSqlString+= " AND a.status = ?";
-        ratingsParams.push(status_filter);
+        ratingsParams.push(statusFilter);
     }
     sqlString+=" AND a.name LIKE ?";
-    params.push(`%${name_filter}%`);
+    params.push(`%${nameFilter}%`);
 
     ratingsSqlString+= " AND a.name LIKE ?";
-    ratingsParams.push(`%${name_filter}%`);
+    ratingsParams.push(`%${nameFilter}%`);
 
-    if(downloads_filter) {
+    ratingsSqlString += " GROUP BY a.ID";
+    if(downloadsFilter) {
         sqlString+=" ORDER BY a.downloads";
+        ratingsSqlString +=" ORDER BY a.downloads";
     } else {
         sqlString+=" ORDER BY a.downloads DESC";
+        ratingsSqlString +=" ORDER BY a.downloads DESC";
     }
+
+    sqlString += " LIMIT ?";
+    params.push(limit || 200);
+    ratingsSqlString += " LIMIT ?";
+    ratingsParams.push(limit || 200);
     const applicationsResult = await sqlQuery(res, sqlString, params);
     const appRatingAvgResult = await sqlQuery(res, ratingsSqlString, ratingsParams);
 
@@ -263,7 +283,7 @@ router.get("/my_applications", checkQuery(["name_filter", "status_filter", "publ
             finalResult.push({
                 ID:obj.ID,
                 name:obj.name,
-                update_date:obj.update_date,
+                updateDate:obj.update_date,
                 public:obj.public,
                 downloads:obj.downloads,
                 description:obj.description,
@@ -278,10 +298,11 @@ router.get("/my_applications", checkQuery(["name_filter", "status_filter", "publ
 });
 
 // uploading application image using ID_application
-router.post("/upload_app_image", appImageUpload.single("file"), async (req, res) => {
-    // require req.body.ID_application
+router.post("/upload_app_image", appImageUpload.single("file"), checkBody(["IDApplication"]), async (req, res) => {
+    // require req.body.IDApplication
+    const {IDApplication} = req.body;
     if(req.file) {
-        await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.now().toISO(), req.body.ID_application]);
+        await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.now().toISO(), IDApplication]);
         res.status(200).json({message:"Uploading succeed"});
     } else {
         res.status(400).json({error:"Uploading failed"})
@@ -289,13 +310,13 @@ router.post("/upload_app_image", appImageUpload.single("file"), async (req, res)
 });
 
 // uploading application download file using ID_application
-router.post("/upload_app_file", appFileUpload.single("file"), async (req, res) => {
-    // require req.body.ID_application
-    const {ID_application} = req.body;
+router.post("/upload_app_file", appFileUpload.single("file"), checkBody(["IDApplication"]), async (req, res) => {
+    // require req.body.IDApplication
+    const {IDApplication} = req.body;
     if(req.file) {
-        await sqlQuery(res, "UPDATE applications SET app_file = ?, update_date = ? WHERE ID = ?", [req.file.filename, DateTime.now().toISO(), ID_application]);
+        await sqlQuery(res, "UPDATE applications SET app_file = ?, update_date = ? WHERE ID = ?", [req.file.filename, DateTime.now().toISO(), IDApplication]);
         if(Number(process.env.CONSOLE_LOGS)) {
-            console.log(`Uploaded app file, ID app ${ID_application}`);
+            console.log(`Uploaded app file, ID app ${IDApplication}`);
         }
         res.status(200).json({message:"Uploading succeed"});
     } else {
@@ -315,29 +336,49 @@ router.post("/upload_application", checkBody(["name", "description", "status"]),
 });
 
 // change visibility to public/private
-router.put("/change_public", checkBody(["ID_application", "public"]), async (req, res) => {
-    const {ID_application, public} = req.body;
-    await sqlQuery(res, "UPDATE applications SET public = ? WHERE ID = ? AND ID_user = ?", [public, ID_application, req.session.userID]);
-    // sending notification about uploaded application
-    if(Number(public) == 1) {
-        const usersResult = await sqlQuery(res, "SELECT ID_user FROM subscriptions WHERE notifications != 'none' AND ID_subscribed = ?", [req.session.userID]);
-        const usernameResult = await sqlQuery(res, "SELECT username FROM users WHERE ID = ?", [req.session.userID]);
-        for(const userID in usersResult) {
-            sendNotification(res, `New publish by ${usernameResult[0].username}`, null, userID.ID_user);
+router.put("/change_public", checkBody(["IDApplication", "public"]), async (req, res) => {
+    const {IDApplication, public} = req.body;
+    const applicationOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM applications WHERE ID = ? AND ID_user = ?", [IDApplication, req.session.userID]);
+    if(applicationOwnershipResult[0].count >= 1) {
+        await sqlQuery(res, "UPDATE applications SET public = ? WHERE ID = ?", [public, IDApplication]);
+        // sending notification about uploaded application
+        if(Number(public) == 1) {
+            const usersResult = await sqlQuery(res, "SELECT ID_user FROM subscriptions WHERE notifications != 'none' AND ID_subscribed = ?", [req.session.userID]);
+            const usernameResult = await sqlQuery(res, "SELECT username FROM users WHERE ID = ?", [req.session.userID]);
+            for(const userID in usersResult) {
+                sendNotification(res, `New publish by ${usernameResult[0].username}`, null, userID.ID_user);
+            }
+            if(Number(process.env.CONSOLE_LOGS)) {
+                console.log(`New publish ID app ${IDApplication}`);
+            }
         }
-        if(Number(process.env.CONSOLE_LOGS)) {
-            console.log(`New publish ID app ${ID_application}`);
-        }
+        res.status(200).json({message:"Changed successfully"});
+    } else {
+        res.status(403).json({error:"You don't have permission for delete this resource"});
     }
-    res.status(200).json({message:"Changed successfully"});
 });
 
-
 // update application by ID
-router.put("/update_application", checkBody(["ID", "name", "description", "status"]), async (req, res) => {
-    const {ID, name, description, status} = req.body;
-    await sqlQuery(res, "UPDATE applications SET name = ?, description = ?, status = ?, update_date = ? WHERE ID = ?", [name, description, status, DateTime.now().toISO(), ID]);
-    res.status(200).json({message:"Updated successfully"});
+router.put("/update_application", checkBody(["IDApplication", "name", "description", "status"]), async (req, res) => {
+    const {IDApplication, name, description, status} = req.body;
+    const applicationOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM applications WHERE ID = ? AND ID_user = ?", [IDApplication, req.session.userID]);
+    if(applicationOwnershipResult[0].count >= 1) {
+        const updateResult = await sqlQuery(res, "UPDATE applications SET name = ?, description = ?, status = ?, update_date = ? WHERE ID = ?", [name, description, status, DateTime.now().toISO(), IDApplication]);
+        res.status(200).json({message:"Updated successfully", updated:updateResult.affectedRows});
+    } else {
+        res.status(403).json({error:"You don't have permission for delete this resource"});
+    }
+});
+
+router.delete("/delete_application", checkBody(["IDApplication"]), async (req, res) => {
+    const {IDApplication} = req.body;
+    const applicationOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM applications WHERE ID = ? AND ID_user = ?", [IDApplication, req.session.userID]);
+    if(applicationOwnershipResult[0].count >= 1) {
+        const deleteResult = await sqlQuery(res, "DELETE FROM applications WHERE ID = ?", [IDApplication]);
+        res.status(200).json({message:"Delete successfully", updated:deleteResult.affectedRows});
+    } else {
+        res.status(403).json({error:"You don't have permission for delete this resource"});
+    }
 });
 
 module.exports = router;

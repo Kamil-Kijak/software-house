@@ -54,9 +54,9 @@ router.put("/update_app_screen", checkBody(["IDAppScreen", "description"]), asyn
     const {IDAppScreen, description} = req.body;
     const appScreenOwnershipResult = await sqlQuery(res, "SELECT COUNT(as.ID) as count FROM app_screens as INNER JOIN applications a ON a.ID=as.ID_application WHERE a.ID_user = ?", [req.session.userID]);
     if(appScreenOwnershipResult[0].count >= 1) {
-        await sqlQuery(res, "UPDATE app_screens SET description = ? WHERE ID = ?", [description, IDAppScreen]);
+        const updateResult = await sqlQuery(res, "UPDATE app_screens SET description = ? WHERE ID = ?", [description, IDAppScreen]);
         await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.now().toISO(), ID_application])
-        res.status(200).json({message:"Updated Successfully"})
+        res.status(200).json({message:"Updated Successfully", updated:updateResult.affectedRows})
     } else {
         res.status(403).json({error:"You don't have permission for update this resource"});
     }
@@ -67,8 +67,8 @@ router.delete("/delete", checkBody(["IDScreen"]), async (req, res) => {
     const {IDScreen} = req.body;
     const appScreenOwnershipResult = await sqlQuery(res, "SELECT COUNT(as.ID) as count FROM app_screens as INNER JOIN applications a ON a.ID=as.ID_application WHERE a.ID_user = ?", [req.session.userID]);
     if(appScreenOwnershipResult[0].count >= 1) {
-        await sqlQuery(res, "DELETE FROM app_screens WHERE ID = ?", [IDScreen]);
-        res.status(200).json({message:"Deleted successfully"});
+        const deleteResult = await sqlQuery(res, "DELETE FROM app_screens WHERE ID = ?", [IDScreen]);
+        res.status(200).json({message:"Deleted successfully", deleted:deleteResult.affectedRows});
     } else {
         res.status(403).json({error:"You don't have permission for update this resource"});
     }
