@@ -12,7 +12,6 @@ const { appScreensUpload } = require("../utils/multerUploads");
 
 const router = express.Router();
 
-router.use(authorization());
 
 
 // request specific app screenshot using ID
@@ -25,37 +24,54 @@ router.get("/app_screen", checkQuery(["ID"]), async (req, res) => {
     res.status(200).sendFile(path.join(filePath, image));
 });
 
+router.use(authorization());
+
 // uploading app screenshots and adding descriptions to specific application using ID_application
-router.post("/upload_app_screens", appScreensUpload.array("files"), checkBody(["descriptions", "ID_application"]), async (req, res) => {
-    const {descriptions, ID_application} = req.body;
-    if(req.files) {
-        const files = req.files.map((obj) => obj.fileName);
-        if(files.length != descriptions.length) {
-            return res.status(400).json({error:"Lengths aren't the same values"});
+router.post("/upload_app_screens", appScreensUpload.array("files"), checkBody(["descriptions", "IDApplication"]), async (req, res) => {
+    const {descriptions, IDApplication} = req.body;
+    const appOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM applications WHERE ID_user = ?", [req.session.userID]);
+    if(appOwnershipResult[0].count >= 1) {
+        if(req.files) {
+            const files = req.files.map((obj) => obj.fileName);
+            if(files.length != descriptions.length) {
+                return res.status(400).json({error:"Lengths aren't the same values"});
+            }
+            for(let i = 0;i<files.length;i++) {
+                await sqlQuery(res, "INSERT INTO app_screens() VALUES(?, ?, ?)", [files[i], descriptions[i], IDApplication]);
+                await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.now().toISO()]);
+            }
+            res.status(201).json({message:"Uploaded successfully"});
+        } else {
+            res.status(400).json({error:"Uploading failed"});
         }
-        for(let i = 0;i<files.length;i++) {
-            await sqlQuery(res, "INSERT INTO app_screens() VALUES(?, ?, ?)", [files[i], descriptions[i], ID_application]);
-            await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.now().toISO()]);
-        }
-        res.status(201).json({message:"Uploaded successfully"});
     } else {
-        res.status(400).json({error:"Uploading failed"});
+        res.status(403).json({error:"You don't have permission for delete this resource"});
     }
 });
 
 // update app screenshot description
-router.put("/update_app_screen", checkBody(["ID_application", "ID_app_screen", "description"]), async (req, res) => {
-    const {ID_application, ID_app_screen, description} = req.body;
-    await sqlQuery(res, "UPDATE app_screens SET description = ? WHERE ID = ? AND ID_application = ?", [description, ID_app_screen, ID_application]);
-    await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.now().toISO(), ID_application])
-    res.status(200).json({message:"Updated Successfully"})
+router.put("/update_app_screen", checkBody(["IDAppScreen", "description"]), async (req, res) => {
+    const {IDAppScreen, description} = req.body;
+    const appScreenOwnershipResult = await sqlQuery(res, "SELECT COUNT(as.ID) as count FROM app_screens as INNER JOIN applications a ON a.ID=as.ID_application WHERE a.ID_user = ?", [req.session.userID]);
+    if(appScreenOwnershipResult[0].count >= 1) {
+        await sqlQuery(res, "UPDATE app_screens SET description = ? WHERE ID = ?", [description, IDAppScreen]);
+        await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.now().toISO(), ID_application])
+        res.status(200).json({message:"Updated Successfully"})
+    } else {
+        res.status(403).json({error:"You don't have permission for update this resource"});
+    }
 });
 
 // delete screenshot using ID_screen
-router.delete("/delete", checkBody(["ID_screen"]), async (req, res) => {
-    const {ID_screen} = req.body;
-    await sqlQuery(res, "DELETE FROM app_screens WHERE ID = ?", [ID_screen]);
-    res.status(200).json({message:"Deleted successfully"});
+router.delete("/delete", checkBody(["IDScreen"]), async (req, res) => {
+    const {IDScreen} = req.body;
+    const appScreenOwnershipResult = await sqlQuery(res, "SELECT COUNT(as.ID) as count FROM app_screens as INNER JOIN applications a ON a.ID=as.ID_application WHERE a.ID_user = ?", [req.session.userID]);
+    if(appScreenOwnershipResult[0].count >= 1) {
+        await sqlQuery(res, "DELETE FROM app_screens WHERE ID = ?", [IDScreen]);
+        res.status(200).json({message:"Deleted successfully"});
+    } else {
+        res.status(403).json({error:"You don't have permission for update this resource"});
+    }
 });
 
 module.exports = router;

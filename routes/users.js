@@ -92,7 +92,8 @@ router.get("/username_available", checkQuery(["username"]), async (req, res) => 
 // checking if email is available
 router.get("/email_available", checkQuery(["email"]), async (req, res) => {
     const {email} = req.query;
-    const emailExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [email]);
+    const trimmedEmail = email.trim();
+    const emailExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE email = ?", [trimmedEmail]);
     if(emailExistResult[0].count == 0) {
         res.status(200).json({message:"This email is available"});
     } else {
@@ -104,27 +105,28 @@ router.get("/email_available", checkQuery(["email"]), async (req, res) => {
 router.post("/register_user", checkBody(["email", "username", "country", "password"]), async (req, res) => {
     const {email, username, country, password} = req.body;
     const trimmedUsername = username.trim();
-    const checkEmailExistResult = await sqlQuery(res, "SELECT COUNT(email) as count FROM users WHERE email = ?", [email]);
+    const trimmedEmail = email.trim();
+    const checkEmailExistResult = await sqlQuery(res, "SELECT COUNT(email) as count FROM users WHERE email = ?", [trimmedEmail]);
     if(checkEmailExistResult[0].count == 0) {
         const checkUsernameExist = await sqlQuery(res, "SELECT COUNT(username) as count FROM users WHERE username = ?", [trimmedUsername]);
         if(checkUsernameExist[0].count == 0) {
             // checking email verification
-            const checkEmailVerified = await sqlQuery(res, "SELECT verified FROM email_verifications WHERE email = ? AND verified = 1", [email]);
+            const checkEmailVerified = await sqlQuery(res, "SELECT verified FROM email_verifications WHERE email = ? AND verified = 1", [trimmedEmail]);
             if(checkEmailVerified.length == 0) {
                 // request email verification
-                await requestRegisterEmailVerification(res, email);
+                await requestRegisterEmailVerification(res, trimmedEmail);
                 res.status(202).json({message:"Verification created waiting for verify email", verificationCreated:true});
             } else {
                 // register user
-                await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
+                await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [trimmedEmail]);
                 const ID = nanoID.nanoid();
                 const passwordHash = await bcrypt.hash(password, 12);
-                await sqlQuery(res, "INSERT INTO users() VALUES(?, ?, ?, ?, ?, 0, NULL)", [ID, email, trimmedUsername, country, passwordHash]);
+                await sqlQuery(res, "INSERT INTO users() VALUES(?, ?, ?, ?, ?, 0, NULL)", [ID, trimmedEmail, trimmedUsername, country, passwordHash]);
                 if(Number(process.env.CONSOLE_LOGS)) {
                     console.log(`Created new user with account ID ${ID}`);
                 }
                 // sending email after registration
-                sendRegisterSucceedEmail(email, trimmedUsername);
+                sendRegisterSucceedEmail(trimmedEmail, trimmedUsername);
                 res.status(201).json({message:"Registered successfully", ID:ID, registered:true});
             }
         } else {
@@ -138,13 +140,14 @@ router.post("/register_user", checkBody(["email", "username", "country", "passwo
 // email verification using sended by email code
 router.post("/verify_email", checkBody(["email", "code"]), async (req, res) => {
     const {email, code} = req.body;
-    const verifyResult = await sqlQuery(res, "SELECT email, code_hash, expire_date FROM email_verifications WHERE email = ?", [email]);
+    const trimmedEmail = email.trim();
+    const verifyResult = await sqlQuery(res, "SELECT email, code_hash, expire_date FROM email_verifications WHERE email = ?", [trimmedEmail]);
     if(verifyResult.length > 0) {
         // checking expire date and code
         const expireDate = new Date(verifyResult[0].expire_date);
         if(expireDate.getTime() >= new Date()) {
             if(await bcrypt.compare(code, verifyResult[0].code_hash)) {
-                await sqlQuery(res, "UPDATE email_verifications SET verified = 1 WHERE email = ?", [email]);
+                await sqlQuery(res, "UPDATE email_verifications SET verified = 1 WHERE email = ?", [trimmedEmail]);
                 res.status(200).json({message:"Verification succeed"});
             } else {
                 res.status(400).json({error:"Invalid code"});
@@ -158,25 +161,26 @@ router.post("/verify_email", checkBody(["email", "code"]), async (req, res) => {
 });
 
 // user login
-router.post("/login_user", checkBody(["email", "password", "auto_login"]), async (req, res) => {
-    const {email, password, auto_login} = req.body;
-    const userResult = await sqlQuery(res, "SELECT ID, email, username, password_hash, double_verification FROM users WHERE email = ?", [email]);
+router.post("/login_user", checkBody(["email", "password", "autoLogin"]), async (req, res) => {
+    const {email, password, autoLogin} = req.body;
+    const trimmedEmail = email.trim();
+    const userResult = await sqlQuery(res, "SELECT ID, email, username, password_hash, double_verification FROM users WHERE email = ?", [trimmedEmail]);
     if(userResult.length > 0) {
         if(await bcrypt.compare(password, userResult[0].password_hash)) {
             const payload = {
-                auto_login:auto_login,
+                autoLogin:autoLogin,
                 userID:userResult[0].ID,
             }
             if(userResult[0].double_verification == 1) {
                 // checking email verification
-                const checkEmailVerified = await sqlQuery(res, "SELECT verified FROM email_verifications WHERE email = ? AND verified = 1", [email]);
+                const checkEmailVerified = await sqlQuery(res, "SELECT verified FROM email_verifications WHERE email = ? AND verified = 1", [trimmedEmail]);
                 if(checkEmailVerified.length == 0) {
                     // sending verification
-                    await requestEmailDoubleVerification(res, email);
+                    await requestEmailDoubleVerification(res, trimmedEmail);
                     res.status(202).json({message:"Verification created waiting for verify email", verificationCreated:true});
                 } else {
                     // login user
-                    await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
+                    await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [trimmedEmail]);
                     createRefreshToken(res, payload);
                     res.status(200).json({message:"Logged successfully", session:payload})
                 }
@@ -220,9 +224,9 @@ router.use(authorization());
 // automatic login at start of the application, where user checked remember me
 router.get("/automatic_login", (req, res) => {
     const session = req.session;
-    if(session.auto_login) {
+    if(session.autoLogin) {
         createRefreshToken(res, session);
-        res.status(200).json({message:"logged successfully", session:payload});
+        res.status(200).json({message:"logged successfully", session:req.session});
     } else {
         res.status(403).json({error:"Access denied for automatic login"});
     }
@@ -287,19 +291,20 @@ router.post("/upload_profile_picture", profileImageUpload.single("file"), async 
     if(!req.file) {
         res.status(400).json({error:"Error with uploading file on the server"});
     }
-    res.status(200).json({message:"Uploaded successfully"});
+    res.status(201).json({message:"Uploaded successfully"});
 });
 
 
 // email updation on session user
-router.put("/update_email", checkBody(["new_email", "password"]), async (req, res) => {
-    const {new_email, password} = req.body;
-    const emailExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM users WHERE email = ?", [new_email]);
+router.put("/update_email", checkBody(["newEmail", "password"]), async (req, res) => {
+    const {newEmail, password} = req.body;
+    const newEmailTrimmed = newEmail.trim();
+    const emailExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM users WHERE email = ?", [newEmailTrimmed]);
     if(emailExistResult[0].count == 0) {
         const actualUserResult = await sqlQuery(res, "SELECT password_hash FROM users WHERE ID = ?", [req.session.ID]);
         if(await bcrypt.compare(password, actualUserResult[0].password_hash)) {
-            await sqlQuery(res, "UPDATE users SET email = ? WHERE ID", [new_email, req.session.ID]);
-            res.status(200).json({message:"Email update succeed"});
+            const updateResult = await sqlQuery(res, "UPDATE users SET email = ? WHERE ID", [newEmailTrimmed, req.session.ID]);
+            res.status(200).json({message:"Email update succeed", updated:updateResult.affectedRows});
         } else {
             res.status(400).json({error:"Invalid password"});
         }
@@ -309,8 +314,8 @@ router.put("/update_email", checkBody(["new_email", "password"]), async (req, re
 });
 
 // password updation on session user
-router.put("/update_password", checkBody(["new_password"]), async (req, res) => {
-    const {new_password} = req.body;
+router.put("/update_password", checkBody(["newPassword"]), async (req, res) => {
+    const {newPassword} = req.body;
     const actualUserResult = await sqlQuery(res, "SELECT email FROM users WHERE ID = ?", [req.session.userID]);
     const email = actualUserResult[0].email;
     // checking email verification
@@ -322,21 +327,21 @@ router.put("/update_password", checkBody(["new_password"]), async (req, res) => 
     } else {
         // changing password
         await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
-        const newPasswordHash = bcrypt.hashSync(new_password, 12);
-        await sqlQuery(res, "UPDATE users SET password_hash = ? WHERE ID = ?", [newPasswordHash, req.session.userID]);
-        res.status(200).json({message:"Password update succeed"})
+        const newPasswordHash = bcrypt.hashSync(newPassword, 12);
+        const updateResult = await sqlQuery(res, "UPDATE users SET password_hash = ? WHERE ID = ?", [newPasswordHash, req.session.userID]);
+        res.status(200).json({message:"Password update succeed", updated:updateResult.affectedRows});
     }
 });
 
 
 // request profile update on session user
-router.put("/update_profile", checkBody(["username", "country", "double_verification", "profile_description"]), async (req, res) => {
-    const {username, country, double_verification, profile_description} = req.body;
+router.put("/update_profile", checkBody(["username", "country", "doubleVerification", "profileDscription"]), async (req, res) => {
+    const {username, country, doubleVerification, profileDescription} = req.body;
     const trimmedUsername = username.trim();
     const usernameExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [trimmedUsername]);
     if(usernameExistResult[0].count == 0) {
-        await sqlQuery(res, "UPDATE users SET username = ?, country = ?, double_verification = ?, profile_description = ? WHERE ID = ?", [trimmedUsername, country, double_verification, profile_description, req.session.userID]);
-        res.status(200).json({message:"Profile updated"});
+        const updateResult = await sqlQuery(res, "UPDATE users SET username = ?, country = ?, double_verification = ?, profile_description = ? WHERE ID = ?", [trimmedUsername, country, doubleVerification, profileDescription, req.session.userID]);
+        res.status(200).json({message:"Profile updated", updated:updateResult.affectedRows});
     } else {
         res.status(409).json({error:"This username is already exist"});
     }
@@ -349,11 +354,13 @@ router.delete("/delete_profile", checkBody(["password"]), async (req, res) => {
     const userResult = await sqlQuery(res, "SELECT password_hash FROM users WHERE ID = ?", [req.session.userID]);
     if(userResult.length > 0) {
         if(await(bcrypt.compare(password, userResult[0].password_hash))) {
-            await sqlQuery(res, "DELETE FROM users WHERE ID = ?", [req.session.userID]);
+            const deleteResult = await sqlQuery(res, "DELETE FROM users WHERE ID = ?", [req.session.userID]);
             if(Number(process.env.CONSOLE_LOGS)) {
                 console.log(`Deleted user account ID ${req.session.userID}`);
             }
-            res.status(200).json({message:"Delete succeed"});
+            res.clearCookie("ACCESS_TOKEN");
+            res.clearCookie("REFRESH_TOKEN");
+            res.status(200).json({message:"Delete succeed", deleted:deleteResult.affectedRows});
         } else {
             res.status(403).json({error:"Invalid password"});
         }

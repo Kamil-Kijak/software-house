@@ -8,6 +8,7 @@ const sqlQuery = require("../utils/mysqlQuery");
 const sendNotification = require("../utils/sendNotification");
 
 const authorization = require("../utils/authorization");
+const checkQuery = require("../utils/checkQuery");
 
 const router = express.Router();
 
@@ -18,18 +19,36 @@ const router = express.Router();
 
 
 // request users subscribed by user with ID
-router.get("/user_subscriptions/:ID", async (req, res) => {
+router.get("/user_subscriptions/:ID", checkQuery(["usernameFilter", "limit"]), async (req, res) => {
     const {ID} = req.params;
-    const subscriptionsResult = await sqlQuery(res, "SELECT u.username, u.ID, u.profile_description, s.notifications FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_user = ?", [ID]);
-    res.status(200).json({message:"Retrivied successfully", subscriptions_data:subscriptionsResult});
+    const {limit, usernameFilter} = req.query;
+    let sqlString = "SELECT u.username, u.ID, u.profile_description, s.notifications FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_user = ?";
+    const params = [ID]
+    if(usernameFilter) {
+        sqlString+= " AND u.username LIKE ?";
+        params.push(`%${usernameFilter}%`);
+    }
+    sqlString+= " LIMIT ?";
+    params.push(limit || 200);
+    const subscriptionsResult = await sqlQuery(res, sqlString, params);
+    res.status(200).json({message:"Retrivied successfully", subscriptionsData:subscriptionsResult});
 });
 
 
 // request users which subscribe user with ID
-router.get("/user_subscribers/:ID", async (req, res) => {
+router.get("/user_subscribers/:ID", checkQuery(["usernameFilter", "limit"]), async (req, res) => {
     const {ID} = req.params;
-    const subscribersResult = await sqlQuery(res, "SELECT u.username, u.ID, u.profile_description FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_subscribed = ?", [ID]);
-    res.status(200).json({message:"Retrivied successfully", subscribers_data:subscribersResult});
+    const {limit, usernameFilter} = req.query;
+    let sqlString = "SELECT u.username, u.ID, u.profile_description FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_subscribed = ?";
+    const params = [ID]
+    if(usernameFilter) {
+        sqlString+= " AND u.username LIKE ?";
+        params.push(`%${usernameFilter}%`);
+    }
+    sqlString+= " LIMIT ?";
+    params.push(limit || 200);
+    const subscribersResult = await sqlQuery(res, sqlString, params);
+    res.status(200).json({message:"Retrivied successfully", subscribersData:subscribersResult});
 });
 
 router.use(authorization());
@@ -48,40 +67,58 @@ router.get("/subscriptions_data/:ID", async (req, res) => {
 });
 
 // request users subscribed by session user
-router.get("/my_subscriptions", async (req, res) => {
-    const subscriptionsResult = await sqlQuery(res, "SELECT u.username, u.ID, s.notifications FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_user = ?", [req.session.userID]);
-    res.status(200).json({message:"Retrivied successfully", subscriptions_data:subscriptionsResult});
+router.get("/my_subscriptions", checkQuery(["usernameFilter", "limit"]), async (req, res) => {
+    const {usernameFilter, limit} = req.query;
+    let sqlString = "SELECT u.username, u.ID, u.profile_description, s.notifications FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_user = ?";
+    const params = [req.session.userID];
+    if(usernameFilter) {
+        sqlString+= " AND u.username LIKE ?";
+        params.push(`%${usernameFilter}%`);
+    }
+    sqlString+= " LIMIT ?";
+    params.push(limit || 200);
+    const subscriptionsResult = await sqlQuery(res, sqlString, params);
+    res.status(200).json({message:"Retrivied successfully", subscriptionsData:subscriptionsResult});
 });
 
 // request users which subscribe session user
-router.get("/my_subscribers", async (req, res) => {
-    const subscribersResult = await sqlQuery(res, "SELECT u.username, u.ID FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_subscribed = ?", [req.session.userID]);
-    res.status(200).json({message:"Retrivied successfully", subscribers_data:subscribersResult});
+router.get("/my_subscribers", checkQuery(["usernameFilter", "limit"]), async (req, res) => {
+    const {limit, usernameFilter} = req.query;
+    let sqlString = "SELECT u.username, u.ID, u.profile_description FROM subscriptions s INNER JOIN users u ON u.ID=s.ID_subscribed WHERE s.ID_subscribed = ?";
+    const params = [req.session.userID];
+    if(usernameFilter) {
+        sqlString+= " AND u.username LIKE ?";
+        params.push(`%${usernameFilter}%`);
+    }
+    sqlString+= " LIMIT ?";
+    params.push(limit || 200);
+    const subscribersResult = await sqlQuery(res, sqlString, params);
+    res.status(200).json({message:"Retrivied successfully", subscribersData:subscribersResult});
 });
 
 // toggling subscription
-router.post("/toggle_subscription", checkBody(["ID_user"]), async (req, res) => {
-    const {ID_user} = req.body;
-    const subscriptionExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_user = ? AND ID_subscribed = ?", [req.session.userID, ID_user]);
+router.post("/toggle_subscription", checkBody(["IDUser"]), async (req, res) => {
+    const {IDUser} = req.body;
+    const subscriptionExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_user = ? AND ID_subscribed = ?", [req.session.userID, IDUser]);
     if(subscriptionExistResult[0].count == 0) {
         // if subscription don't exist
-        await sqlQuery(res, "INSERT INTO subscriptions() VALUES(?, ?, ?, ?)", [nanoID.nanoid(), req.session.userID, ID_user, "all"]);
+        await sqlQuery(res, "INSERT INTO subscriptions() VALUES(?, ?, ?, ?)", [nanoID.nanoid(), req.session.userID, IDUser, "all"]);
         // sending notification
         const userResult = await sqlQuery(res, "SELECT username FROM users WHERE ID = ?", [req.session.userID]);
-        await sendNotification(res, `User ${userResult[0].username} is now subscribing you`, null, ID_user);
+        await sendNotification(res, `User ${userResult[0].username} is now subscribing you`, null, IDUser);
         res.status(201).json({message:"New subscription Created"});
     } else {
-        await sqlQuery(res, "DELETE FROM subscriptions WHERE ID_user = ? AND ID_subscribed = ?", [req.session.userID, ID_user]);
-        await sqlQuery(res, "DELETE FROM notifications WHERE ID_user = ?", [ID_user]);
-        res.status(200).json({message:"Subscription delete succeed"});
+        const deleteResult = await sqlQuery(res, "DELETE FROM subscriptions WHERE ID_user = ? AND ID_subscribed = ?", [req.session.userID, IDUser]);
+        await sqlQuery(res, "DELETE FROM notifications WHERE ID_user = ?", [IDUser]);
+        res.status(200).json({message:"Subscription delete succeed", deleted:deleteResult.affectedRows});
     }
 });
 
 // update notifications settings
-router.put("/update_subscription", checkBody(["ID_user", "notifications"]), async (req, res) => {
-    const {ID_user, notifications} = req.body;
-    await sqlQuery(res, "UPDATE subscriptions SET notifications = ? WHERE ID_user = ? AND ID_subscribed = ?", [notifications, req.session.userID, ID_user]);
-    res.status(200).json({message:"Subscription update succeed"})
+router.put("/update_subscription", checkBody(["IDUser", "notifications"]), async (req, res) => {
+    const {IDUser, notifications} = req.body;
+    const updateResult = await sqlQuery(res, "UPDATE subscriptions SET notifications = ? WHERE ID_user = ? AND ID_subscribed = ?", [notifications, req.session.userID, IDUser]);
+    res.status(200).json({message:"Subscription update succeed", updated:updateResult.affectedRows})
 });
 
 
