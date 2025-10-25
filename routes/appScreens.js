@@ -9,6 +9,7 @@ const sqlQuery = require("../utils/mysqlQuery");
 const authorization = require("../utils/authorization");
 const checkQuery = require("../utils/checkQuery");
 const { appScreensUpload } = require("../utils/multerUploads");
+const { body, validationResult } = require("express-validator");
 
 const router = express.Router();
 
@@ -27,7 +28,13 @@ router.get("/app_screen", checkQuery(["ID"]), async (req, res) => {
 router.use(authorization());
 
 // uploading app screenshots and adding descriptions to specific application using ID_application
-router.post("/upload_app_screens", appScreensUpload.array("files"), checkBody(["descriptions", "IDApplication"]), async (req, res) => {
+router.post("/upload_app_screens", [appScreensUpload.array("files"), checkBody(["descriptions", "IDApplication"]),
+    body("descriptions").isArray().withMessage("Must be an array"),
+    body("descriptions.*").trim().isLength({min:1, max:25}).withMessage("Must be in length between 1 and 25")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {descriptions, IDApplication} = req.body;
     const appOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM applications WHERE ID_user = ?", [req.session.userID]);
     if(appOwnershipResult[0].count >= 1) {
@@ -37,7 +44,7 @@ router.post("/upload_app_screens", appScreensUpload.array("files"), checkBody(["
                 return res.status(400).json({error:"Lengths aren't the same values"});
             }
             for(let i = 0;i<files.length;i++) {
-                await sqlQuery(res, "INSERT INTO app_screens() VALUES(?, ?, ?)", [files[i], descriptions[i], IDApplication]);
+                await sqlQuery(res, "INSERT INTO app_screens() VALUES(?, ?, ?)", [files[i], descriptions[i].trim(), IDApplication]);
                 await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.now().toISO()]);
             }
             res.status(201).json({message:"Uploaded successfully"});
@@ -50,11 +57,16 @@ router.post("/upload_app_screens", appScreensUpload.array("files"), checkBody(["
 });
 
 // update app screenshot description
-router.put("/update_app_screen", checkBody(["IDAppScreen", "description"]), async (req, res) => {
+router.put("/update_app_screen", [checkBody(["IDAppScreen", "description"]),
+    body("description").trim().isLength({min:1, max:25}).withMessage("Must be in length between 1 and 25")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {IDAppScreen, description} = req.body;
     const appScreenOwnershipResult = await sqlQuery(res, "SELECT COUNT(as.ID) as count FROM app_screens as INNER JOIN applications a ON a.ID=as.ID_application WHERE a.ID_user = ?", [req.session.userID]);
     if(appScreenOwnershipResult[0].count >= 1) {
-        const updateResult = await sqlQuery(res, "UPDATE app_screens SET description = ? WHERE ID = ?", [description, IDAppScreen]);
+        const updateResult = await sqlQuery(res, "UPDATE app_screens SET description = ? WHERE ID = ?", [description.trim(), IDAppScreen]);
         await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.now().toISO(), ID_application])
         res.status(200).json({message:"Updated Successfully", updated:updateResult.affectedRows})
     } else {

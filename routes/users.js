@@ -4,6 +4,7 @@ const bcrypt = require("bcrypt");
 const nanoID = require("nanoid");
 const fs = require("fs");
 const path = require("path");
+const {body, validationResult} = require("express-validator");
 
 const checkBody = require("../utils/checkBody");
 const checkQuery = require("../utils/checkQuery");
@@ -102,7 +103,16 @@ router.get("/email_available", checkQuery(["email"]), async (req, res) => {
 });
 
 // user registration
-router.post("/register_user", checkBody(["email", "username", "country", "password"]), async (req, res) => {
+router.post("/register_user", [checkBody(["email", "username", "country", "password"]),
+    body("email").trim().isLength({max:50}).withMessage("Is too long"),
+    body("email").trim().isEmail().withMessage("Is not correct"),
+    body("username").trim().isLength({max:50}).withMessage("Is too long"),
+    body("country").trim().isLength({max:50}).withMessage("Is too long"),
+    body("password").isLength({min:8}).withMessage("Is too short")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {email, username, country, password} = req.body;
     const trimmedUsername = username.trim();
     const trimmedEmail = email.trim();
@@ -138,7 +148,13 @@ router.post("/register_user", checkBody(["email", "username", "country", "passwo
 });
 
 // email verification using sended by email code
-router.post("/verify_email", checkBody(["email", "code"]), async (req, res) => {
+router.post("/verify_email", [checkBody(["email", "code"]), 
+    body("email").trim().isLength({max:50}).withMessage("Is too long"),
+    body("email").trim().isEmail().withMessage("Is not correct")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {email, code} = req.body;
     const trimmedEmail = email.trim();
     const verifyResult = await sqlQuery(res, "SELECT email, code_hash, expire_date FROM email_verifications WHERE email = ?", [trimmedEmail]);
@@ -161,14 +177,20 @@ router.post("/verify_email", checkBody(["email", "code"]), async (req, res) => {
 });
 
 // user login
-router.post("/login_user", checkBody(["email", "password", "autoLogin"]), async (req, res) => {
+router.post("/login_user", [checkBody(["email", "password", "autoLogin"]),
+    body("email").trim().isLength({max:50}).withMessage("Is too long"),
+    body("email").trim().isEmail().withMessage("Is not correct"),
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {email, password, autoLogin} = req.body;
     const trimmedEmail = email.trim();
     const userResult = await sqlQuery(res, "SELECT ID, email, username, password_hash, double_verification FROM users WHERE email = ?", [trimmedEmail]);
     if(userResult.length > 0) {
         if(await bcrypt.compare(password, userResult[0].password_hash)) {
             const payload = {
-                autoLogin:autoLogin,
+                autoLogin:autoLogin ? 1 : 0,
                 userID:userResult[0].ID,
             }
             if(userResult[0].double_verification == 1) {
@@ -296,7 +318,14 @@ router.post("/upload_profile_picture", profileImageUpload.single("file"), async 
 
 
 // email updation on session user
-router.put("/update_email", checkBody(["newEmail", "password"]), async (req, res) => {
+router.put("/update_email", [checkBody(["newEmail", "password"]),
+    body("newEmail").trim().isLength({max:50}).withMessage("Email too long"),
+    body("newEmail").trim().isEmail().withMessage("Is not correct"),
+    body("password").trim().isLength({min:8}).withMessage("Is too short")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {newEmail, password} = req.body;
     const newEmailTrimmed = newEmail.trim();
     const emailExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM users WHERE email = ?", [newEmailTrimmed]);
@@ -314,7 +343,12 @@ router.put("/update_email", checkBody(["newEmail", "password"]), async (req, res
 });
 
 // password updation on session user
-router.put("/update_password", checkBody(["newPassword"]), async (req, res) => {
+router.put("/update_password", [checkBody(["newPassword"]),
+    body("newPassword").isLength({min:8}).withMessage("Is too short")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {newPassword} = req.body;
     const actualUserResult = await sqlQuery(res, "SELECT email FROM users WHERE ID = ?", [req.session.userID]);
     const email = actualUserResult[0].email;
@@ -335,12 +369,23 @@ router.put("/update_password", checkBody(["newPassword"]), async (req, res) => {
 
 
 // request profile update on session user
-router.put("/update_profile", checkBody(["username", "country", "doubleVerification", "profileDscription"]), async (req, res) => {
+router.put("/update_profile", [checkBody(["username", "country", "doubleVerification", "profileDescription"]),
+    body("username").trim().isLength({max:50}).withMessage("Is too long"),
+    body("country").trim().isLength({max:50}).withMessage("Is too long"),
+    body("profileDescription").isLength({max:255}).withMessage("Is too long"),
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
     const {username, country, doubleVerification, profileDescription} = req.body;
     const trimmedUsername = username.trim();
     const usernameExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [trimmedUsername]);
     if(usernameExistResult[0].count == 0) {
-        const updateResult = await sqlQuery(res, "UPDATE users SET username = ?, country = ?, double_verification = ?, profile_description = ? WHERE ID = ?", [trimmedUsername, country, doubleVerification, profileDescription, req.session.userID]);
+        const updateResult = await sqlQuery(res, "UPDATE users SET username = ?, country = ?, double_verification = ?, profile_description = ? WHERE ID = ?", [trimmedUsername, country, doubleVerification ? "1" : "0", profileDescription, req.session.userID]);
         res.status(200).json({message:"Profile updated", updated:updateResult.affectedRows});
     } else {
         res.status(409).json({error:"This username is already exist"});

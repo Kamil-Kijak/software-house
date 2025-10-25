@@ -8,6 +8,7 @@ const checkBody = require("../utils/checkBody");
 const sqlQuery = require("../utils/mysqlQuery");
 
 const authorization = require("../utils/authorization");
+const { body, validationResult } = require("express-validator");
 
 const router = express.Router();
 
@@ -31,7 +32,13 @@ router.get("/my_links", async (req, res) => {
 
 
 // adding new link to session user
-router.post("/insert_link", checkBody(["name", "href"]), async (req, res) => {
+router.post("/insert_link", [checkBody(["name", "href"]),
+    body("name").trim().isLength({max:25}).withMessage("Is too long"),
+    body("href").trim().isLength({max:255}).withMessage("Is too long")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {name, href} = req.body;
     const trimmedName = name.trim();
     const trimmedHref = href.trim();
@@ -46,13 +53,19 @@ router.post("/insert_link", checkBody(["name", "href"]), async (req, res) => {
 });
 
 // update session user link by link ID
-router.put("/update_link", checkBody(["ID", "name", "href"]), async (req, res) => {
-    const {ID, name, href} = req.body;
+router.put("/update_link", [checkBody(["IDLink", "name", "href"]),
+    body("name").trim().isLength({max:25}).withMessage("Is too long"),
+    body("href").trim().isLength({max:255}).withMessage("Is too long")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
+    const {IDLink, name, href} = req.body;
     const trimmedName = name.trim();
     const trimmedHref = href.trim();
-    const linkOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM social_links WHERE ID_user = ? AND ID = ?", [req.session.userID, ID]);
+    const linkOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM social_links WHERE ID_user = ? AND ID = ?", [req.session.userID, IDLink]);
     if(linkOwnershipResult[0].count >= 1) {
-        const updateResult = await sqlQuery(res, "UPDATE social_links SET name = ?, href = ? WHERE ID = ?", [trimmedName, trimmedHref, ID]);
+        const updateResult = await sqlQuery(res, "UPDATE social_links SET name = ?, href = ? WHERE ID = ?", [trimmedName, trimmedHref, IDLink]);
         res.status(200).json({message:"Update succeed", updated:updateResult.affectedRows});
     } else {
         res.status(403).json({error:"You don't have permission for update this resource"});
@@ -60,11 +73,11 @@ router.put("/update_link", checkBody(["ID", "name", "href"]), async (req, res) =
 });
 
 // delete session user link
-router.delete("/delete_link", checkBody(["ID"]), async (req, res) => {
-    const {ID} = req.body;
-    const linkOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM social_links WHERE ID_user = ? AND ID = ?", [req.session.userID, ID]);
+router.delete("/delete_link", checkBody(["IDLink"]), async (req, res) => {
+    const {IDLink} = req.body;
+    const linkOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM social_links WHERE ID_user = ? AND ID = ?", [req.session.userID, IDLink]);
     if(linkOwnershipResult[0].count >= 1) {
-        const deleteResult = await sqlQuery(res, "DELETE FROM social_links WHERE ID = ?", [ID]);
+        const deleteResult = await sqlQuery(res, "DELETE FROM social_links WHERE ID = ?", [IDLink]);
         res.status(200).json({message:"Delete succeed", deleted:deleteResult.affectedRows});
     } else {
         res.status(403).json({error:"You don't have permission for delete this resource"});

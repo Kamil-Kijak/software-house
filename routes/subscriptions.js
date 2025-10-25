@@ -1,7 +1,7 @@
 
 const express = require("express");
 const nanoID = require("nanoid");
-const {DateTime} = require("luxon");
+const {query, body, validationResult} = require("express-validator");
 
 const checkBody = require("../utils/checkBody");
 const sqlQuery = require("../utils/mysqlQuery");
@@ -9,6 +9,7 @@ const sendNotification = require("../utils/sendNotification");
 
 const authorization = require("../utils/authorization");
 const checkQuery = require("../utils/checkQuery");
+
 
 const router = express.Router();
 
@@ -29,7 +30,7 @@ router.get("/user_subscriptions/:ID", checkQuery(["usernameFilter", "limit"]), a
         params.push(`%${usernameFilter}%`);
     }
     sqlString+= " LIMIT ?";
-    params.push(limit || 200);
+    params.push(limit || "200");
     const subscriptionsResult = await sqlQuery(res, sqlString, params);
     res.status(200).json({message:"Retrivied successfully", subscriptionsData:subscriptionsResult});
 });
@@ -46,7 +47,7 @@ router.get("/user_subscribers/:ID", checkQuery(["usernameFilter", "limit"]), asy
         params.push(`%${usernameFilter}%`);
     }
     sqlString+= " LIMIT ?";
-    params.push(limit || 200);
+    params.push(limit || "200");
     const subscribersResult = await sqlQuery(res, sqlString, params);
     res.status(200).json({message:"Retrivied successfully", subscribersData:subscribersResult});
 });
@@ -76,7 +77,7 @@ router.get("/my_subscriptions", checkQuery(["usernameFilter", "limit"]), async (
         params.push(`%${usernameFilter}%`);
     }
     sqlString+= " LIMIT ?";
-    params.push(limit || 200);
+    params.push(limit || "200");
     const subscriptionsResult = await sqlQuery(res, sqlString, params);
     res.status(200).json({message:"Retrivied successfully", subscriptionsData:subscriptionsResult});
 });
@@ -91,7 +92,7 @@ router.get("/my_subscribers", checkQuery(["usernameFilter", "limit"]), async (re
         params.push(`%${usernameFilter}%`);
     }
     sqlString+= " LIMIT ?";
-    params.push(limit || 200);
+    params.push(limit || "200");
     const subscribersResult = await sqlQuery(res, sqlString, params);
     res.status(200).json({message:"Retrivied successfully", subscribersData:subscribersResult});
 });
@@ -115,7 +116,12 @@ router.post("/toggle_subscription", checkBody(["IDUser"]), async (req, res) => {
 });
 
 // update notifications settings
-router.put("/update_subscription", checkBody(["IDUser", "notifications"]), async (req, res) => {
+router.put("/update_subscription", [checkBody(["IDUser", "notifications"]),
+    body("notifications").isWhitelisted(["all", "minimal", "none"]).withMessage("Is not match all, minimal or none")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {IDUser, notifications} = req.body;
     const updateResult = await sqlQuery(res, "UPDATE subscriptions SET notifications = ? WHERE ID_user = ? AND ID_subscribed = ?", [notifications, req.session.userID, IDUser]);
     res.status(200).json({message:"Subscription update succeed", updated:updateResult.affectedRows})

@@ -41,7 +41,7 @@ router.use(authorization());
 // requesting all notifications of session user
 router.get("/my_notifications", checkQuery(["limit"]), async (req, res) => {
     const {limit} = req.query;
-    const notificationsResult = await sqlQuery(res, "SELECT ID, send_date, title, read, href FROM notifications WHERE ID_user = ? LIMIT ?", [req.session.userID, limit || 200]);
+    const notificationsResult = await sqlQuery(res, "SELECT ID, send_date, title, read, href FROM notifications WHERE ID_user = ? LIMIT ?", [req.session.userID, limit || "200"]);
     await sqlQuery(res, "UPDATE notifications SET read = 1 WHERE read = 0 AND ID_user = ?", [req.session.userID]);
     res.status(200).json({message:"Retriviered notifications", notifications:notificationsResult});
 });

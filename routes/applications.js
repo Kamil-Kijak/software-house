@@ -12,6 +12,7 @@ const sendNotification = require("../utils/sendNotification");
 const {appImageUpload, appFileUpload} = require("../utils/multerUploads");
 const { DateTime } = require("luxon");
 const checkQuery = require("../utils/checkQuery");
+const { validationResult, body } = require("express-validator");
 
 const router = express.Router();
 
@@ -67,8 +68,8 @@ router.get("/app_data", checkQuery(["IDApplication"]), async (req, res) => {
 // requesting user applications filtered by name_filter
 router.get("/user_applications", checkQuery(["IDuser", "nameFilter", "limit"]), async (req, res) => {
     const {IDUser, nameFilter, limit} = req.query;
-    const applicationsResult = await sqlQuery(res, "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ? AND a.name LIKE ? ORDER BY a.downloads DESC", [IDUser, `%${nameFilter}%`, limit || 200]);
-    const appRatingAvgResult = await sqlQuery(res, "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application WHERE a.ID_user = ? AND a.name LIKE ? GROUP BY a.ID ORDER BY a.downloads DESC LIMIT ?", [IDUser, `%${nameFilter}%`, limit || 200]);
+    const applicationsResult = await sqlQuery(res, "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ? AND a.name LIKE ? ORDER BY a.downloads DESC", [IDUser, `%${nameFilter}%`, limit || "200"]);
+    const appRatingAvgResult = await sqlQuery(res, "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application WHERE a.ID_user = ? AND a.name LIKE ? GROUP BY a.ID ORDER BY a.downloads DESC LIMIT ?", [IDUser, `%${nameFilter}%`, limit || "200"]);
     const ratingAverages = {};
     appRatingAvgResult.forEach((obj) => ratingAverages[obj.ID] = obj.rating);
     const finalResult = [];
@@ -127,9 +128,9 @@ router.get("/applications", checkQuery(["usernameFilter", "nameFilter", "statusF
         ratingsSqlString +=" ORDER BY a.downloads DESC";
     }
     sqlString += " LIMIT ?";
-    params.push(limit || 200);
+    params.push(limit || "200");
     ratingsSqlString += " LIMIT ?";
-    ratingsParams.push(limit || 200);
+    ratingsParams.push(limit || "200");
     const applicationsResult = await sqlQuery(res, sqlString, params);
     const appRatingAvgResult = await sqlQuery(res, ratingsSqlString, ratingsParams);
 
@@ -195,9 +196,9 @@ router.get("/subscribed_applications", checkQuery(["usernameFilter", "nameFilter
     }
 
     sqlString += " LIMIT ?";
-    params.push(limit || 200);
+    params.push(limit || "200");
     ratingsSqlString += " LIMIT ?";
-    ratingsParams.push(limit || 200);
+    ratingsParams.push(limit || "200");
     const applicationsResult = await sqlQuery(res, sqlString, params);
     const appRatingAvgResult = await sqlQuery(res, ratingsSqlString, ratingsParams);
 
@@ -268,9 +269,9 @@ router.get("/my_applications", checkQuery(["usernameFilter", "nameFilter", "stat
     }
 
     sqlString += " LIMIT ?";
-    params.push(limit || 200);
+    params.push(limit || "200");
     ratingsSqlString += " LIMIT ?";
-    ratingsParams.push(limit || 200);
+    ratingsParams.push(limit || "200");
     const applicationsResult = await sqlQuery(res, sqlString, params);
     const appRatingAvgResult = await sqlQuery(res, ratingsSqlString, ratingsParams);
 
@@ -325,10 +326,18 @@ router.post("/upload_app_file", appFileUpload.single("file"), checkBody(["IDAppl
 });
 
 // request insert application empty sketch
-router.post("/upload_application", checkBody(["name", "description", "status"]), async (req, res) => {
+router.post("/upload_application", [checkBody(["name", "description", "status"]),
+    body("name").trim().isLength({min:1, max:25}).withMessage("Must be in length between 1 and 25"),
+    body("description").isLength({max:65535}).withMessage("Is too long"),
+    body("status").isWhitelisted(["release","early-access","beta-tests"]).withMessage("Is not match release, early-access or beta-tests")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {name, description, status} = req.body;
+    const trimmedName = name.trim();
     const ID = nanoID.nanoid();
-    await sqlQuery(res, "INSERT INTO applications() VALUES(?, ?, NULL, ?, ?, 0, 0, ?)", [ID, name, description, DateTime.now().toISO(), status, req.session.userID]);
+    await sqlQuery(res, "INSERT INTO applications() VALUES(?, ?, NULL, ?, ?, 0, 0, ?)", [ID, trimmedName, description, DateTime.now().toISO(), status, req.session.userID]);
     if(Number(process.env.CONSOLE_LOGS)) {
         console.log(`Upload app file, ID app ${ID}`);
     }
@@ -340,7 +349,7 @@ router.put("/change_public", checkBody(["IDApplication", "public"]), async (req,
     const {IDApplication, public} = req.body;
     const applicationOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM applications WHERE ID = ? AND ID_user = ?", [IDApplication, req.session.userID]);
     if(applicationOwnershipResult[0].count >= 1) {
-        await sqlQuery(res, "UPDATE applications SET public = ? WHERE ID = ?", [public, IDApplication]);
+        await sqlQuery(res, "UPDATE applications SET public = ? WHERE ID = ?", [public ? "1" : "1", IDApplication]);
         // sending notification about uploaded application
         if(Number(public) == 1) {
             const usersResult = await sqlQuery(res, "SELECT ID_user FROM subscriptions WHERE notifications != 'none' AND ID_subscribed = ?", [req.session.userID]);
@@ -359,7 +368,14 @@ router.put("/change_public", checkBody(["IDApplication", "public"]), async (req,
 });
 
 // update application by ID
-router.put("/update_application", checkBody(["IDApplication", "name", "description", "status"]), async (req, res) => {
+router.put("/update_application", [checkBody(["IDApplication", "name", "description", "status"]),
+    body("name").trim().isLength({min:1, max:25}).withMessage("Must be in length between 1 and 25"),
+    body("description").isLength({max:65535}).withMessage("Is too long"),
+    body("status").isWhitelisted(["release","early-access","beta-tests"]).withMessage("Is not match release, early-access or beta-tests")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {IDApplication, name, description, status} = req.body;
     const applicationOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM applications WHERE ID = ? AND ID_user = ?", [IDApplication, req.session.userID]);
     if(applicationOwnershipResult[0].count >= 1) {

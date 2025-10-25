@@ -2,19 +2,23 @@
 
 const express = require("express");
 const nanoID = require("nanoid");
-const path = require("path");
-const fs = require("fs");
 
 const checkBody = require("../utils/checkBody");
 const sqlQuery = require("../utils/mysqlQuery");
 const authorization = require("../utils/authorization");
 const checkQuery = require("../utils/checkQuery");
 const { DateTime } = require("luxon");
+const { body, validationResult} = require("express-validator");
 
 const router = express.Router();
 
 // request opinions of the ID_application, filtered by username or rating
-router.get("/opinions", checkQuery(["IDApplication", "usernameFilter", "ratingFilter", "limit"]), async (req, res) => {
+router.get("/opinions", [checkQuery(["IDApplication", "usernameFilter", "ratingFilter", "limit"]),
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
     const {IDApplication, usernameFilter, ratingFilter, limit} = req.query;
     let sqlString = "SELECT o.ID, o.rating, o.upload_date, o.comment, o.edited, u.username, u.ID as ID_user FROM opinions o INNER JOIN users u ON u.ID=o.ID_user WHERE ID_application = ? AND u.username LIKE ?";
     const params = [IDApplication, `%${usernameFilter}%`];
@@ -26,7 +30,8 @@ router.get("/opinions", checkQuery(["IDApplication", "usernameFilter", "ratingFi
         } 
     }
     sqlString+= " LIMIT ?";
-    params.push(limit || 200);
+    params.push(limit || "200");
+    console.log(params)
     const opinionsResult = await sqlQuery(res, sqlString, params);
     res.status(200).json({message:"Retriviered opinions", opinions:opinionsResult});
 });
@@ -34,7 +39,13 @@ router.get("/opinions", checkQuery(["IDApplication", "usernameFilter", "ratingFi
 router.use(authorization());
 
 // request insert session user new opinion to the app
-router.post("/insert_opinion", checkBody(["IDApplication", "rating", "comment"]), async (req, res) => {
+router.post("/insert_opinion", [checkBody(["IDApplication", "rating", "comment"]),
+    body("rating").isInt({min:1, max:5}).withMessage("Must be a number between 1 and 5"),
+    body("comment").trim().isLength({min:1, max:65535}).withMessage("Invalid text size")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {IDApplication, rating, comment} = req.body;
     const trimmedComment = comment.trim();
     // checking if this user opinion exist
@@ -48,7 +59,13 @@ router.post("/insert_opinion", checkBody(["IDApplication", "rating", "comment"])
 });
 
 // request update session user opinion
-router.put("/update_opinion", checkBody(["IDOpinion", "rating", "comment"]), async (req, res) => {
+router.put("/update_opinion", [checkBody(["IDOpinion", "rating", "comment"]),
+    body("rating").isInt({min:1, max:5}).withMessage("Must be a number between 1 and 5"),
+    body("comment").trim().isLength({min:1, max:65535}).withMessage("Invalid text size")
+], async (req, res) => {
+    if(!validationResult(req).isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {IDOpinion, rating, comment} = req.body;
     const trimmedComment = comment.trim();
     const opinionOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM opinions WHERE ID_opinion = ? AND ID_user = ?", [IDOpinion, req.session.userID]);
@@ -73,4 +90,4 @@ router.delete("/delete_opinion", checkBody(["IDOpinion"]), async (req, res) => {
 });
 
 
-module.exports = express;
+module.exports = router;
