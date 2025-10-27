@@ -303,7 +303,7 @@ router.post("/upload_app_image", appImageUpload.single("file"), checkBody(["IDAp
     // require req.body.IDApplication
     const {IDApplication} = req.body;
     if(req.file) {
-        await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.now().toISO(), IDApplication]);
+        await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.utc().toSQL(), IDApplication]);
         res.status(200).json({message:"Uploading succeed"});
     } else {
         res.status(400).json({error:"Uploading failed"})
@@ -315,7 +315,7 @@ router.post("/upload_app_file", appFileUpload.single("file"), checkBody(["IDAppl
     // require req.body.IDApplication
     const {IDApplication} = req.body;
     if(req.file) {
-        await sqlQuery(res, "UPDATE applications SET app_file = ?, update_date = ? WHERE ID = ?", [req.file.filename, DateTime.now().toISO(), IDApplication]);
+        await sqlQuery(res, "UPDATE applications SET app_file = ?, update_date = ? WHERE ID = ?", [req.file.filename, DateTime.utc().toSQL(), IDApplication]);
         if(Number(process.env.CONSOLE_LOGS)) {
             console.log(`Uploaded app file, ID app ${IDApplication}`);
         }
@@ -337,7 +337,7 @@ router.post("/upload_application", [checkBody(["name", "description", "status"])
     const {name, description, status} = req.body;
     const trimmedName = name.trim();
     const ID = nanoID.nanoid();
-    await sqlQuery(res, "INSERT INTO applications() VALUES(?, ?, NULL, ?, ?, 0, 0, ?)", [ID, trimmedName, description, DateTime.now().toISO(), status, req.session.userID]);
+    await sqlQuery(res, "INSERT INTO applications() VALUES(?, ?, NULL, ?, ?, 0, 0, ?)", [ID, trimmedName, description, DateTime.utc().toSQL(), status, req.session.userID]);
     if(Number(process.env.CONSOLE_LOGS)) {
         console.log(`Upload app file, ID app ${ID}`);
     }
@@ -379,7 +379,7 @@ router.put("/update_application", [checkBody(["IDApplication", "name", "descript
     const {IDApplication, name, description, status} = req.body;
     const applicationOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM applications WHERE ID = ? AND ID_user = ?", [IDApplication, req.session.userID]);
     if(applicationOwnershipResult[0].count >= 1) {
-        const updateResult = await sqlQuery(res, "UPDATE applications SET name = ?, description = ?, status = ?, update_date = ? WHERE ID = ?", [name, description, status, DateTime.now().toISO(), IDApplication]);
+        const updateResult = await sqlQuery(res, "UPDATE applications SET name = ?, description = ?, status = ?, update_date = ? WHERE ID = ?", [name, description, status, DateTime.utc().toSQL(), IDApplication]);
         res.status(200).json({message:"Updated successfully", updated:updateResult.affectedRows});
     } else {
         res.status(403).json({error:"You don't have permission for delete this resource"});

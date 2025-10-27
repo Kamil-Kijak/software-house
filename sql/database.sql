@@ -1,5 +1,6 @@
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+SET time_zone = '+00:00';  
 CREATE DATABASE software_house_database;
 USE software_house_database;
 
@@ -29,12 +30,12 @@ CREATE TABLE `email_verifications` (
 	`email` CHAR(50) NOT NULL PRIMARY KEY,
     `code_hash` VARCHAR(60) NOT NULL,
     `verified` BOOLEAN NOT NULL DEFAULT 0,
-    `expire_date` CHAR(29) NOT NULL
+    `expire_date` TIMESTAMP NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `notifications` (
 	`ID` CHAR(21) NOT NULL PRIMARY KEY,
-    `send_date` CHAR(29) NOT NULL,
+    `send_date` TIMESTAMP NOT NULL,
     `title` VARCHAR(75) NOT NULL,
     `read` BOOLEAN NOT NULL DEFAULT 0,
     `href` VARCHAR(255),
@@ -48,7 +49,7 @@ CREATE TABLE `applications` (
     `name` VARCHAR(25) NOT NULL,
     `description` TEXT NOT NULL,
     `app_file` VARCHAR(35) DEFAULT NULL,
-    `update_date` CHAR(29) NOT NULL,
+    `update_date` TIMESTAMP NOT NULL,
     `status` ENUM("release", "early-access", "beta-tests") NOT NULL DEFAULT "release",
     `public` BOOLEAN NOT NULL DEFAULT 0,
     `downloads` INT NOT NULL DEFAULT 0,
@@ -70,7 +71,7 @@ CREATE TABLE `opinions` (
     `ID_user` CHAR(21) NOT NULL,
     `ID_application` CHAR(21) NOT NULL,
     `rating` INT NOT NULL DEFAULT 5,
-    `upload_date` CHAR(29) NOT NULL,
+    `upload_date` TIMESTAMP NOT NULL,
     `edited` BOOLEAN NOT NULL DEFAULT 0,
     `comment` TEXT DEFAULT NULL,
     CHECK (`rating` BETWEEN 1 AND 5),

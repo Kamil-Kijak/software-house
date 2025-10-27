@@ -51,7 +51,7 @@ router.post("/insert_opinion", [checkBody(["IDApplication", "rating", "comment"]
     // checking if this user opinion exist
     const opinionExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM opinions WHERE ID_user = ? AND ID_application = ?", [req.session.userID, IDApplication]);
     if(opinionExistResult[0].count == 0) {
-        await sqlQuery(res, "INSERT INTO opinions() VALUES(?, ?, ?, ?, ?, 0, ?)", [nanoID.nanoid(), req.session.userID, IDApplication, rating, DateTime.now().toISO(), trimmedComment]);
+        await sqlQuery(res, "INSERT INTO opinions() VALUES(?, ?, ?, ?, ?, 0, ?)", [nanoID.nanoid(), req.session.userID, IDApplication, rating, DateTime.utc().toSQL(), trimmedComment]);
         res.status(201).json({message:"Inserted successfully"});
     } else {
         res.status(409).json({error:"This opinion is already exist!"});
@@ -70,7 +70,7 @@ router.put("/update_opinion", [checkBody(["IDOpinion", "rating", "comment"]),
     const trimmedComment = comment.trim();
     const opinionOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM opinions WHERE ID_opinion = ? AND ID_user = ?", [IDOpinion, req.session.userID]);
     if(opinionOwnershipResult[0].count >= 1) {
-        const updateResult = await sqlQuery(res, "UPDATE opinion SET rating = ?, comment = ?, upload_date = ?, edited = 1 WHERE ID = ?", [rating, trimmedComment, DateTime.now().toISO(), IDOpinion]);
+        const updateResult = await sqlQuery(res, "UPDATE opinion SET rating = ?, comment = ?, upload_date = ?, edited = 1 WHERE ID = ?", [rating, trimmedComment, DateTime.utc().toSQL(), IDOpinion]);
         res.status(200).json({message:"Update succeed", updated:updateResult.affectedRows});
     } else {
         res.status(403).json({error:"You don't have permission for update this resource"});

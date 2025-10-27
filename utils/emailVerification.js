@@ -16,7 +16,7 @@ async function requestRegisterEmailVerification(res, email) {
 
     const now = DateTime.local();
     const futureDate = now.plus({hours:1})
-    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toISO()]);
+    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toSQL()]);
     if(Number(process.env.CONSOLE_LOGS)) {
         console.log(`New email verification for email ${"****" + String(email).substring(Math.min(4, email.length))}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
     }
@@ -78,7 +78,7 @@ async function requestEmailDoubleVerification(res, email) {
 
     const now = DateTime.local();
     const futureDate = now.plus({hours:1})
-    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toISO()]);
+    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toSQL()]);
     if(Number(process.env.CONSOLE_LOGS)) {
         console.log(`New double-verification for email ${"****" + String(email).substring(Math.min(4, email.length))}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
     }
@@ -140,7 +140,7 @@ async function requestPasswordChangeEmailVerification(res, email) {
 
     const now = DateTime.local();
     const futureDate = now.plus({hours:1})
-    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toISO()]);
+    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toSQL()]);
     if(Number(process.env.CONSOLE_LOGS)) {
         console.log(`New password change verification for email ${"****" + String(email).substring(Math.min(4, email.length))}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
     }
