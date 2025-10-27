@@ -14,9 +14,9 @@ async function requestRegisterEmailVerification(res, email) {
     const code = nanoid(9).toLowerCase();
     const codeHash = await bcrypt.hash(code, 12);
 
-    const now = DateTime.local();
+    const now = DateTime.utc();
     const futureDate = now.plus({hours:1})
-    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toSQL()]);
+    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toFormat("yyyy-MM-dd HH:mm:ss")]);
     if(Number(process.env.CONSOLE_LOGS)) {
         console.log(`New email verification for email ${"****" + String(email).substring(Math.min(4, email.length))}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
     }
@@ -76,9 +76,9 @@ async function requestEmailDoubleVerification(res, email) {
     const code = nanoid(9).toLowerCase();
     const codeHash = await bcrypt.hash(code, 12);
 
-    const now = DateTime.local();
+    const now = DateTime.utc();
     const futureDate = now.plus({hours:1})
-    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toSQL()]);
+    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toFormat("yyyy-MM-dd HH:mm:ss")]);
     if(Number(process.env.CONSOLE_LOGS)) {
         console.log(`New double-verification for email ${"****" + String(email).substring(Math.min(4, email.length))}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
     }
@@ -138,9 +138,9 @@ async function requestPasswordChangeEmailVerification(res, email) {
     const code = nanoid(9).toLowerCase();
     const codeHash = await bcrypt.hash(code, 12);
 
-    const now = DateTime.local();
+    const now = DateTime.utc();
     const futureDate = now.plus({hours:1})
-    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toSQL()]);
+    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toFormat("yyyy-MM-dd HH:mm:ss")]);
     if(Number(process.env.CONSOLE_LOGS)) {
         console.log(`New password change verification for email ${"****" + String(email).substring(Math.min(4, email.length))}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
     }

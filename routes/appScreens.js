@@ -45,7 +45,7 @@ router.post("/upload_app_screens", [appScreensUpload.array("files"), checkBody([
             }
             for(let i = 0;i<files.length;i++) {
                 await sqlQuery(res, "INSERT INTO app_screens() VALUES(?, ?, ?)", [files[i], descriptions[i].trim(), IDApplication]);
-                await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.utc().toSQL()]);
+                await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.utc().toFormat("yyyy-MM-dd HH:mm:ss")]);
             }
             res.status(201).json({message:"Uploaded successfully"});
         } else {
@@ -67,7 +67,7 @@ router.put("/update_app_screen", [checkBody(["IDAppScreen", "description"]),
     const appScreenOwnershipResult = await sqlQuery(res, "SELECT COUNT(as.ID) as count FROM app_screens as INNER JOIN applications a ON a.ID=as.ID_application WHERE a.ID_user = ?", [req.session.userID]);
     if(appScreenOwnershipResult[0].count >= 1) {
         const updateResult = await sqlQuery(res, "UPDATE app_screens SET description = ? WHERE ID = ?", [description.trim(), IDAppScreen]);
-        await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.utc().toSQL(), ID_application])
+        await sqlQuery(res, "UPDATE applications SET update_date = ? WHERE ID = ?", [DateTime.utc().toFormat("yyyy-MM-dd HH:mm:ss"), ID_application])
         res.status(200).json({message:"Updated Successfully", updated:updateResult.affectedRows})
     } else {
         res.status(403).json({error:"You don't have permission for update this resource"});

@@ -18,7 +18,7 @@ cronTask.schedule("0 0 1 * *", async () => {
     }
     const allNotificationsResult = await sqlQuery(res, "SELECT ID, send_date FROM notifications")
     const notificationsForDelete = allNotificationsResult.filter((obj) => {
-        const date = DateTime.fromISO(obj.send_date, { zone: "utc" });
+        const date = DateTime.fromSQL(obj.send_date, { zone: "utc" });
         if(DateTime.now().diff(date, ["days"]).toObject().days > 30 * 3) {
             return true;
         } else {
