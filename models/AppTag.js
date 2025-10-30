@@ -6,7 +6,7 @@ const { nanoid } = require("nanoid");
 const Application = require("./Application");
 
 const AppTag = db.define("AppTag", {
-    ID:{
+    id:{
         type:DataTypes.CHAR(21),
         allowNull:false,
         primaryKey:true,
@@ -16,30 +16,30 @@ const AppTag = db.define("AppTag", {
         type:DataTypes.STRING(20),
         allowNull:false
     },
-    ID_application:{
+    idApplication:{
         type:DataTypes.CHAR(21),
         allowNull:false
     }
 },
 {
-    tableName:"app_tags",
-    underscored:true,
+    tableName:"appTags",
+    timestamps:false,
     indexes:[
         {
             name:"idx_application",
-            fields:["ID_application"]
+            fields:["idApplication"]
         }
     ]
 });
 
 Application.hasMany(AppTag, {
-    foreignKey:"ID_application",
+    foreignKey:"idApplication",
     onDelete:"CASCADE",
     as:"appTags"
 });
 
 AppTag.belongsTo(Application, {
-    foreignKey:"ID_application",
+    foreignKey:"idApplication",
     onDelete:"CASCADE",
     as:"application"
 });

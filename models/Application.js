@@ -5,7 +5,7 @@ const { nanoid } = require("nanoid");
 const User = require("./User");
 
 const Application = db.define("Application", {
-    ID:{
+    id:{
         type:DataTypes.CHAR(21),
         primaryKey:true,
         allowNull:false,
@@ -19,11 +19,11 @@ const Application = db.define("Application", {
         type:DataTypes.TEXT,
         allowNull:false
     },
-    app_file:{
+    appFile:{
         type:DataTypes.STRING(35),
         defaultValue:null
     },
-    update_date:{
+    updateDate:{
         type:DataTypes.DATE,
         allowNull:false
     },
@@ -42,30 +42,31 @@ const Application = db.define("Application", {
         allowNull:false,
         defaultValue:0
     },
-    ID_user:{
+    idUser:{
         type:DataTypes.CHAR(21),
     }
 },
 {
-    tableName:"application",
-    underscored:true,
+    tableName:"applications",
+    timestamps:false,
     indexes:[
         {
             name:"idx_user",
-            fields:["ID_user"]
+            fields:["idUser"]
         }
     ]
 });
 
 User.hasMany(Application, {
-    foreignKey:"ID_user",
+    foreignKey:"idUser",
     onDelete:"SET NULL",
     as:"applications"
 });
 Application.belongsTo(User, {
-    foreignKey:"ID_user",
+    foreignKey:"idUser",
     onDelete:"SET NULL",
     as:"user"
 });
+
 
 module.exports = Application;

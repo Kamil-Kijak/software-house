@@ -1,10 +1,11 @@
 
 const { DataTypes } = require("sequelize");
 const db = require("../utils/db");
+const { nanoid } = require("nanoid");
 
 
 const User = db.define("User", {
-    ID:{
+    id:{
         type:DataTypes.CHAR(21),
         primaryKey:true,
         allowNull:false,
@@ -27,16 +28,16 @@ const User = db.define("User", {
         type:DataTypes.STRING(50),
         allowNull:false
     },
-    password_hash:{
+    passwordHash:{
         type:DataTypes.CHAR(60),
         allowNull:false
     },
-    double_verification:{
+    doubleVerification:{
         type:DataTypes.BOOLEAN,
         allowNull:false,
         defaultValue:false,
     },
-    profile_description:{
+    profileDescription:{
         type:DataTypes.STRING(255),
         allowNull:true,
         defaultValue:null
@@ -44,7 +45,7 @@ const User = db.define("User", {
 },
 {
     tableName: "users",
-    underscored: true
+    timestamps:false
 });
 
 module.exports = User;

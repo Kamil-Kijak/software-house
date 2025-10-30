@@ -2,23 +2,34 @@
 const bcrypt = require("bcrypt");
 const {DateTime} = require("luxon");
 
-const sqlQuery = require("./mysqlQuery");
 const sendMail = require("./sendMail");
 const { nanoid } = require("nanoid");
+const EmailVerification = require("../models/EmailVerification");
 
-async function requestRegisterEmailVerification(res, email) {
-    const verificationExist = await sqlQuery(res, "SELECT COUNT(email) as count FROM email_verifications WHERE email = ?", [email]);
-    if(verificationExist[0].count == 1) {
-        await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
+
+
+async function insertVerification(email) {
+    const verificationExist = await EmailVerification.count({where:{email:email}});
+    if(verificationExist == 1) {
+        await EmailVerification.destroy({where:{email:email}})
     }
     const code = nanoid(9).toLowerCase();
     const codeHash = await bcrypt.hash(code, 12);
 
     const now = DateTime.utc();
-    const futureDate = now.plus({hours:1})
-    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toFormat("yyyy-MM-dd HH:mm:ss")]);
+    const futureDate = now.plus({hours:1});
+    await EmailVerification.create({
+        email,
+        codeHash:codeHash,
+        expireDate:futureDate.toJSDate()
+    });
+    return code;
+}
+
+async function requestRegisterEmailVerification(res, email) {
+    const code = await insertVerification(email);
     if(Number(process.env.CONSOLE_LOGS)) {
-        console.log(`New email verification for email ${"****" + String(email).substring(Math.min(4, email.length))}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
+        console.log(`New email verification for email ${"****" + String(email).substring(Math.min(4, email.length))}`);
     }
     // sending code email
     const mailOptions = {
@@ -69,18 +80,9 @@ async function requestRegisterEmailVerification(res, email) {
 
 }
 async function requestEmailDoubleVerification(res, email) {
-    const verificationExist = await sqlQuery(res, "SELECT COUNT(email) as count FROM email_verifications WHERE email = ?", [email]);
-    if(verificationExist[0].count == 1) {
-        await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
-    }
-    const code = nanoid(9).toLowerCase();
-    const codeHash = await bcrypt.hash(code, 12);
-
-    const now = DateTime.utc();
-    const futureDate = now.plus({hours:1})
-    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toFormat("yyyy-MM-dd HH:mm:ss")]);
+    const code = await insertVerification(email);
     if(Number(process.env.CONSOLE_LOGS)) {
-        console.log(`New double-verification for email ${"****" + String(email).substring(Math.min(4, email.length))}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
+        console.log(`New double-verification for email ${"****" + String(email).substring(Math.min(4, email.length))}`);
     }
     // sending code email
     const mailOptions = {
@@ -131,18 +133,9 @@ async function requestEmailDoubleVerification(res, email) {
 }
 
 async function requestPasswordChangeEmailVerification(res, email) {
-    const verificationExist = await sqlQuery(res, "SELECT COUNT(email) as count FROM email_verifications WHERE email = ?", [email]);
-    if(verificationExist[0].count == 1) {
-        await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
-    }
-    const code = nanoid(9).toLowerCase();
-    const codeHash = await bcrypt.hash(code, 12);
-
-    const now = DateTime.utc();
-    const futureDate = now.plus({hours:1})
-    await sqlQuery(res, "INSERT INTO email_verifications() VALUES(?, ?, 0, ?)", [email, codeHash, futureDate.toFormat("yyyy-MM-dd HH:mm:ss")]);
+    const code = await insertVerification(email);
     if(Number(process.env.CONSOLE_LOGS)) {
-        console.log(`New password change verification for email ${"****" + String(email).substring(Math.min(4, email.length))}. Expire date: ${futureDate.toLocaleString(DateTime.DATETIME_SHORT)}`);
+        console.log(`New password change verification for email ${"****" + String(email).substring(Math.min(4, email.length))}`);
     }
     // sending code email
     const mailOptions = {

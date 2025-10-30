@@ -8,7 +8,7 @@ const EmailVerification = db.define("EmailVerification", {
         allowNull:false,
         primaryKey:true,
     },
-    code_hash:{
+    codeHash:{
         type:DataTypes.CHAR(60),
         allowNull:false
     },
@@ -17,14 +17,15 @@ const EmailVerification = db.define("EmailVerification", {
         allowNull:false,
         defaultValue:false
     },
-    expire_date:{
+    expireDate:{
         type:DataTypes.DATE,
         allowNull:false
     }
 },
 {
-    tableName:"email_verifications",
-    underscored:true,
+    tableName:"emailVerifications",
+    timestamps:false
 });
+
 
 module.exports = EmailVerification;

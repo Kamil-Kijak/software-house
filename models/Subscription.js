@@ -5,17 +5,17 @@ const { nanoid } = require("nanoid");
 const User = require("./User");
 
 const Subscription = db.define("Subscription", {
-    ID:{
+    id:{
         type:DataTypes.CHAR(21),
         allowNull:false,
         primaryKey:true,
         defaultValue:() => nanoid()
     },
-    ID_user:{
+    idUser:{
         type:DataTypes.CHAR(21),
         allowNull:false,
     },
-    ID_subscribed:{
+    idSubscribed:{
         type:DataTypes.CHAR(21),
         allowNull:false,
     },
@@ -27,36 +27,37 @@ const Subscription = db.define("Subscription", {
 },
 {
     tableName:"subscriptions",
-    underscored:true,
+    timestamps:false,
     indexes: [
         {
             name:"idx_user",
-            fields: ["ID_user"],
+            fields: ["idUser"],
         },
         {
             name:"idx_subscribed",
-            fields: ["ID_subcribed"],
+            fields: ["idSubscribed"],
         }
     ],
 });
 
 User.hasMany(Subscription, {
-    foreignKey: "ID_user",
+    foreignKey: "idUser",
     as: "subscriptions",
     onDelete: "CASCADE",
 });
 User.hasMany(Subscription, {
-    foreignKey: "ID_subscribed",
+    foreignKey: "idSubscribed",
     as: "subscribers",
     onDelete: "CASCADE",
 });
 Subscription.belongsTo(User, {
-    foreignKey: "ID_user",
+    foreignKey: "idUser",
     as: "subscriber",
 });
 Subscription.belongsTo(User, {
-    foreignKey: "ID_subscribed",
+    foreignKey: "idSubscribed",
     as: "subscribed",
 });
+
 
 module.exports = Subscription;

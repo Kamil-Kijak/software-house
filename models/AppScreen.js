@@ -5,7 +5,7 @@ const { nanoid } = require("nanoid");
 const Application = require("./Application");
 
 const AppScreen = db.define("AppScreen", {
-    ID:{
+    id:{
         type:DataTypes.CHAR(21),
         allowNull:false,
         primaryKey:true,
@@ -15,32 +15,33 @@ const AppScreen = db.define("AppScreen", {
         type:DataTypes.STRING(25),
         defaultValue:null
     },
-    ID_application:{
+    idApplication:{
         type:DataTypes.CHAR(21),
         allowNull:false
     }
 },
 {
-    tableName:"app_screens",
-    underscored:true,
+    tableName:"appScreens",
+    timestamps:false,
     indexes:[
         {
             name:"idx_application",
-            fields:["ID_application"]
+            fields:["idApplication"]
         }
     ]
 });
 
 Application.hasMany(AppScreen, {
-    foreignKey:"ID_application",
+    foreignKey:"idApplication",
     onDelete:"CASDADE",
     as:"appScreens"
 });
 
 AppScreen.belongsTo(Application, {
-    foreignKey:"ID_application",
+    foreignKey:"idApplication",
     onDelete:"CASDADE",
     as:"application"
 });
+
 
 module.exports = AppScreen;

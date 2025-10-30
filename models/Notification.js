@@ -6,13 +6,13 @@ const { nanoid } = require("nanoid");
 const User = require("./User")
 
 const Notification = db.define("Notification", {
-    ID: {
+    id: {
         type:DataTypes.CHAR(21),
         allowNull:false,
         primaryKey:true,
         defaultValue:() => nanoid()
     },
-    send_date:{
+    sendDate:{
         type:DataTypes.DATE,
         allowNull:false
     },
@@ -28,31 +28,32 @@ const Notification = db.define("Notification", {
     href:{
         type:DataTypes.STRING(255)
     },
-    ID_user:{
+    idUser:{
         type:DataTypes.CHAR(21),
         allowNull:false
     }
 },
 {
     tableName:"notifications",
-    underscored:true,
+    timestamps:false,
     indexes:[
         {
             name:"idx_user",
-            fields:["ID_user"]
+            fields:["idUser"]
         }
     ]
 });
 
 User.hasMany(Notification, {
-    foreignKey:"ID_user",
+    foreignKey:"idUser",
     as:"notifications",
     onDelete:"CASCADE"
 });
 Notification.belongsTo(User, {
-    foreignKey:"ID_user",
+    foreignKey:"idUser",
     as:"user",
     onDelete:"CASCADE"
 })
+
 
 module.exports = Notification;

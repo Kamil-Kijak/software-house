@@ -6,17 +6,17 @@ const Application = require("./Application");
 const User = require("./User");
 
 const Opinion = db.define("Opinion", {
-    ID:{
+    id:{
         type:DataTypes.CHAR(21),
         allowNull:false,
         primaryKey:true,
         defaultValue:() => nanoid()
     },
-    ID_user:{
+    idUser:{
         type:DataTypes.CHAR(21),
         allowNull:false
     },
-    ID_application:{
+    idApplication:{
         type:DataTypes.CHAR(21),
         allowNull:false
     },
@@ -29,7 +29,7 @@ const Opinion = db.define("Opinion", {
             max:5
         }
     },
-    upload_date:{
+    uploadDate:{
         type:DataTypes.DATE,
         allowNull:false
     },
@@ -45,39 +45,39 @@ const Opinion = db.define("Opinion", {
 },
 {
     tableName:"opinions",
-    underscored:true,
+    timestamps:false,
     indexes:[
         {
             name:"idx_application",
-            fields:["ID_application"]
+            fields:["idApplication"]
         },
         {
             name:"idx_user",
-            fields:["ID_user"]
+            fields:["idUser"]
         }
     ]
 });
 
 Application.hasMany(Opinion, {
-    foreignKey:"ID_application",
+    foreignKey:"idApplication",
     onDelete:"CASCADE",
     as:"opinions"
 });
 
 User.hasMany(Opinion, {
-    foreignKey:"ID_user",
+    foreignKey:"idUser",
     onDelete:"CASCADE",
     as:"opinions"
 });
 
 Opinion.belongsTo(Application, {
-    foreignKey:"ID_application",
+    foreignKey:"idApplication",
     onDelete:"CASCADE",
     as:"application"
 });
 
 Opinion.belongsTo(User, {
-    foreignKey:"ID_user",
+    foreignKey:"idUser",
     onDelete:"CASCADE",
     as:"user"
 });

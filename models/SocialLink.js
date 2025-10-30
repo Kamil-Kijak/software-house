@@ -5,7 +5,7 @@ const { nanoid } = require("nanoid");
 const User = require("./User");
 
 const SocialLink = db.define("SocialLink", {
-    ID:{
+    id:{
         type:DataTypes.CHAR(21),
         allowNull:false,
         primaryKey:true,
@@ -19,29 +19,29 @@ const SocialLink = db.define("SocialLink", {
         type:DataTypes.STRING(255),
         allowNull:false
     },
-    ID_user:{
+    idUser:{
         type:DataTypes.CHAR(21),
         allowNull:false
     }
 },
 {
-    tableName:"social_links",
-    underscored:true,
+    tableName:"socialLinks",
+    timestamps:false,
     indexes:[
         {
             name:"idx_user",
-            fields:["ID_user"]
+            fields:["idUser"]
         }
     ]
 });
 
 User.hasMany(SocialLink, {
-    foreignKey:"ID_user",
+    foreignKey:"idUser",
     onDelete:"CASCADE",
     as:"socialLinks"
 });
 SocialLink.belongsTo(User, {
-    foreignKey:"ID_user",
+    foreignKey:"idUser",
     onDelete:"CASCADE",
     as:"user"
 });
