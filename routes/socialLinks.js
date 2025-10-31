@@ -2,10 +2,6 @@
 
 
 const express = require("express");
-const nanoID = require("nanoid");
-
-const checkBody = require("../utils/checkBody");
-const sqlQuery = require("../utils/mysqlQuery");
 
 const authorization = require("../utils/authorization");
 const { body, validationResult } = require("express-validator");

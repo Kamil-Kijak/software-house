@@ -6,7 +6,7 @@ const Notification = require("../models/Notification");
 const sendNotification = async (res, title, href = null, ID_user) => {
     try {
         await Notification.create({
-            send_date:DateTime.utc().toFormat("yyyy-MM-dd HH:mm:ss"),
+            send_date:DateTime.utc().toJSDate(),
             title,
             href,
             ID_user
