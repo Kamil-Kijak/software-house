@@ -1,57 +1,73 @@
 
 
 const express = require("express");
-const nanoID = require("nanoid");
 
-const checkBody = require("../utils/checkBody");
-const sqlQuery = require("../utils/mysqlQuery");
 const authorization = require("../utils/authorization");
-const checkQuery = require("../utils/checkQuery");
 const { DateTime } = require("luxon");
-const { body, validationResult} = require("express-validator");
+const { body, validationResult, query} = require("express-validator");
+const Opinion = require("../models/Opinion");
+const User = require("../models/User");
+const { Op } = require("sequelize");
 
 const router = express.Router();
 
 // request opinions of the ID_application, filtered by username or rating
-router.get("/opinions", [checkQuery(["IDApplication", "usernameFilter", "ratingFilter", "limit"]),
+router.get("/get_opinions", [
+    query("idApplication").exists({checkFalsy:false}).withMessage("idApplication is required"),
+    query("ratingFilter").exists().withMessage("ratingFilter is required").isWhitelisted(["ASC", "DESC"]).withMessage("ratingFilter can be ASC or DESC"),
+    query("usernameFilter").exists().withMessage("usernameFilter is required"),
+    query("limit").exists().withMessage("limit is required")
 ], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
     }
-    const {IDApplication, usernameFilter, ratingFilter, limit} = req.query;
-    let sqlString = "SELECT o.ID, o.rating, o.upload_date, o.comment, o.edited, u.username, u.ID as ID_user FROM opinions o INNER JOIN users u ON u.ID=o.ID_user WHERE ID_application = ? AND u.username LIKE ?";
-    const params = [IDApplication, `%${usernameFilter}%`];
-    if(ratingFilter) {
-        if(ratingFilter == "ISC") {
-            sqlString += " ORDER BY o.rating";
-        } else {
-            sqlString += " ORDER BY o.rating DESC";
-        } 
-    }
-    sqlString+= " LIMIT ?";
-    params.push(limit || "200");
-    console.log(params)
-    const opinionsResult = await sqlQuery(res, sqlString, params);
-    res.status(200).json({message:"Retriviered opinions", opinions:opinionsResult});
+    const {idApplication, usernameFilter, ratingFilter, limit} = req.query;
+    const opinions = await Opinion.findAll({
+        attributes:["id", "rating", "uploadDate", "comment", "edited"],
+        include:{
+            model:User,
+            as:"user",
+            attributes:["id"],
+            where:{
+                username:{
+                    [Op.like]: `%${usernameFilter}%`
+                }
+            }
+        },
+        where:{
+            idApplication:idApplication
+        },
+        ...(ratingFilter && {order:[["rating", ratingFilter === "ASC" ? "ASC" : "DESC"]]}),
+        ...(limit ? {limit} : {limit:200})
+    });
+    res.status(200).json({message:"Retriviered opinions", opinions});
 });
 
 router.use(authorization());
 
 // request insert session user new opinion to the app
-router.post("/insert_opinion", [checkBody(["IDApplication", "rating", "comment"]),
-    body("rating").isInt({min:1, max:5}).withMessage("Must be a number between 1 and 5"),
-    body("comment").trim().isLength({min:1, max:65535}).withMessage("Invalid text size")
+router.post("/insert_opinion", [
+    body("idApplication").exists({checkFalsy:true}).withMessage("idApplication is required"),
+    body("rating").exists({checkFalsy:true}).withMessage("rating is required").isInt({min:1, max:5}).withMessage("rating between 1-5"),
+    body("comment").trim().exists({checkFalsy:true}).withMessage("comment is required").isLength({min:1, max:65535}).withMessage("comment length between 1-65535")
 ], async (req, res) => {
-    if(!validationResult(req).isEmpty()) {
-        return res.status(400).json({errors: errors.array()});
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
     }
-    const {IDApplication, rating, comment} = req.body;
+    const {idApplication, rating, comment} = req.body;
     const trimmedComment = comment.trim();
     // checking if this user opinion exist
-    const opinionExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM opinions WHERE ID_user = ? AND ID_application = ?", [req.session.userID, IDApplication]);
-    if(opinionExistResult[0].count == 0) {
-        await sqlQuery(res, "INSERT INTO opinions() VALUES(?, ?, ?, ?, ?, 0, ?)", [nanoID.nanoid(), req.session.userID, IDApplication, rating, DateTime.utc().toFormat("yyyy-MM-dd HH:mm:ss"), trimmedComment]);
+    const opinionCount = await Opinion.count({where:{idUser:req.session.userID, idApplication}});
+    if(opinionCount == 0) {
+        await Opinion.create({
+            idUser:req.session.userID,
+            idApplication,
+            rating,
+            uploadDate:DateTime.utc().toJSDate(),
+            comment:trimmedComment
+        });
         res.status(201).json({message:"Inserted successfully"});
     } else {
         res.status(409).json({error:"This opinion is already exist!"});
@@ -59,31 +75,36 @@ router.post("/insert_opinion", [checkBody(["IDApplication", "rating", "comment"]
 });
 
 // request update session user opinion
-router.put("/update_opinion", [checkBody(["IDOpinion", "rating", "comment"]),
-    body("rating").isInt({min:1, max:5}).withMessage("Must be a number between 1 and 5"),
-    body("comment").trim().isLength({min:1, max:65535}).withMessage("Invalid text size")
+router.put("/update_opinion", [
+    body("idOpinion").exists({checkFalsy:true}).withMessage("idOpinion is required"),
+    body("rating").exists({checkFalsy:true}).withMessage("rating is required").isInt({min:1, max:5}).withMessage("rating between 1-5"),
+    body("comment").trim().exists({checkFalsy:true}).withMessage("comment is required").isLength({min:1, max:65535}).withMessage("comment length between 1-65535")
 ], async (req, res) => {
-    if(!validationResult(req).isEmpty()) {
-        return res.status(400).json({errors: errors.array()});
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
     }
-    const {IDOpinion, rating, comment} = req.body;
+    const {idOpinion, rating, comment} = req.body;
     const trimmedComment = comment.trim();
-    const opinionOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM opinions WHERE ID_opinion = ? AND ID_user = ?", [IDOpinion, req.session.userID]);
-    if(opinionOwnershipResult[0].count >= 1) {
-        const updateResult = await sqlQuery(res, "UPDATE opinion SET rating = ?, comment = ?, upload_date = ?, edited = 1 WHERE ID = ?", [rating, trimmedComment, DateTime.utc().toFormat("yyyy-MM-dd HH:mm:ss"), IDOpinion]);
-        res.status(200).json({message:"Update succeed", updated:updateResult.affectedRows});
+
+    const opinionOwnership = await Opinion.count({where:{idOpinion, idUser:req.session.userID}});
+    if(opinionOwnership >= 1) {
+        const [affectedRows] = await Opinion.update({rating, comment:trimmedComment, uploadDate:DateTime.utc().toJSDate(), edited:true}, {where:{id:idOpinion}})
+        res.status(200).json({message:"Update succeed", affectedRows});
     } else {
         res.status(403).json({error:"You don't have permission for update this resource"});
     }
 });
 
 // request opinion deletion using ID_opinion
-router.delete("/delete_opinion", checkBody(["IDOpinion"]), async (req, res) => {
-    const {IDOpinion} = req.body;
-    const opinionOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM opinions WHERE ID_opinion = ? AND ID_user = ?", [IDOpinion, req.session.userID]);
-    if(opinionOwnershipResult[0].count >= 1) {
-        const deleteResult = await sqlQuery(res, "DELETE FROM opinions WHERE ID = ?", [IDOpinion]);
-        res.status(200).json({message:"Deleted successfully", deleted:deleteResult.affectedRows});
+router.delete("/delete_opinion", [
+    body("idOpinion").exists({checkFalsy:true}).withMessage("idOpinion is required"),
+], async (req, res) => {
+    const {idOpinion} = req.body;
+    const opinionOwnership = await Opinion.count({where:{idOpinion, idUser:req.session.userID}});
+    if(opinionOwnership >= 1) {
+        const affectedRows = await Opinion.destroy({where:{id:idOpinion}})
+        res.status(200).json({message:"Deleted successfully", affectedRows});
     } else {
         res.status(403).json({error:"You don't have permission for update this resource"});
     }

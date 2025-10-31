@@ -24,7 +24,7 @@ const subscriptionRouter = require("./routes/subscriptions");
 // const applicationRouter = require("./routes/applications");
 // const appTagRouter = require("./routes/appTags");
 // const appScreenRouter = require("./routes/appScreens");
-// const opinionRouter = require("./routes/opinions");
+const opinionRouter = require("./routes/opinions");
 
 db.sync();
 
@@ -48,7 +48,7 @@ app.use("/api/subscriptions", subscriptionRouter);
 // app.use("/api/applications", applicationRouter);
 // app.use("/api/app_tags", appTagRouter);
 // app.use("/api/app_screens", appScreenRouter);
-// app.use("/api/opinions", opinionRouter);
+app.use("/api/opinions", opinionRouter);
 
 
 if(Number(process.env.PRODUCTION)) {
