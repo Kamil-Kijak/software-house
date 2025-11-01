@@ -40,9 +40,8 @@ const profileImageStorage = multer.diskStorage({
 
 const appImageStorage = multer.diskStorage({
     destination:(req, file, cb) => {
-        // require req.body.IDApplication
-        if(!req.body.IDApplication) {
-            cb(new Error("ID_application is not defined"), folderPath);
+        if(!req.body.idApplication) {
+            cb(new Error("idApplication is not defined"), null);
         }
         const folderPath = path.join(process.cwd(), `files`, `${req.session.userID}`, "apps", `${req.body.ID_application}`);
         if(!fs.existsSync(folderPath)) {
@@ -63,9 +62,8 @@ const appImageStorage = multer.diskStorage({
 
 const appFileStorage = multer.diskStorage({
     destination:(req, file, cb) => {
-        // require req.body.IDApplication
-        if(!req.body.IDApplication) {
-            cb(new Error("ID_application is not defined"), folderPath);
+        if(!req.body.idApplication) {
+            cb(new Error("idApplication is not defined"), null);
         }
         const folderPath = path.join(process.cwd(), `files`, `${req.session.userID}`, "apps", `${req.body.ID_application}`, "download");
         if(!fs.existsSync(folderPath)) {
@@ -86,9 +84,8 @@ const appFileStorage = multer.diskStorage({
 
 const appScreensStorage = multer.diskStorage({
     destination:(req, file, cb) => {
-        // require req.body.IDApplication
-        if(!req.body.IDApplication) {
-            cb(new Error("ID_application is not defined"), folderPath);
+        if(!req.body.idApplication) {
+            cb(new Error("idApplication is not defined"), null);
         }
         const folderPath = path.join(process.cwd(), `files`, `${req.session.userID}`, "apps", `${req.body.ID_application}`, "screens");
         if(!fs.existsSync(folderPath)) {

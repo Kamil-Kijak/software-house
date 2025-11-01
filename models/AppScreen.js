@@ -33,13 +33,13 @@ const AppScreen = db.define("AppScreen", {
 
 Application.hasMany(AppScreen, {
     foreignKey:"idApplication",
-    onDelete:"CASDADE",
+    onDelete:"CASCADE",
     as:"appScreens"
 });
 
 AppScreen.belongsTo(Application, {
     foreignKey:"idApplication",
-    onDelete:"CASDADE",
+    onDelete:"CASCADE",
     as:"application"
 });
 
