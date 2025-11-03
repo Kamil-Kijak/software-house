@@ -1,20 +1,21 @@
 
 const express = require("express");
 const bcrypt = require("bcrypt");
-const nanoID = require("nanoid");
 const fs = require("fs");
 const path = require("path");
-const {body, validationResult} = require("express-validator");
+const {body, validationResult, query} = require("express-validator");
 
-const checkBody = require("../utils/checkBody");
-const checkQuery = require("../utils/checkQuery");
-
-const sqlQuery = require("../utils/mysqlQuery");
 const {requestRegisterEmailVerification, requestEmailDoubleVerification, requestPasswordChangeEmailVerification} = require("../utils/emailVerification");
 const createRefreshToken = require("../utils/createRefreshToken");
 const authorization = require("../utils/authorization");
 const sendMail = require("../utils/sendMail");
 const {profileImageUpload} = require("../utils/multerUploads");
+
+const User = require("../models/User");
+const EmailVerification = require("../models/EmailVerification");
+const SocialLink = require("../models/SocialLink");
+const Subscription = require("../models/Subscription")
+
 
 const router = express.Router();
 
@@ -74,16 +75,26 @@ function sendRegisterSucceedEmail(email, username) {
 
 // sending count of registrated users
 router.get("/registered_count", async (req, res) => {
-    const countResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM users", []);
-    res.status(200).json({message:"Selected count of registered users", count:countResult[0].count})
+    const count = await User.count();
+    res.status(200).json({message:"Selected count of registered users", count:count})
 });
 
 // checking if username already exist
-router.get("/username_available", checkQuery(["username"]), async (req, res) => {
+router.get("/username_available", [
+    query("username").trim().exists({checkFalsy:true}).withMessage("Username is required")
+], async (req, res) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
     const {username} = req.query;
     const trimmedUsername = username.trim();
-    const usernameExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [trimmedUsername]);
-    if(usernameExistResult[0].count == 0) {
+    const count = await User.count({
+        where:{
+            username:trimmedUsername
+        }
+    });
+    if(count == 0) {
         res.status(200).json({message:"This username is available"});
     } else {
         res.status(409).json({error:"This username is already exist"});
@@ -91,11 +102,21 @@ router.get("/username_available", checkQuery(["username"]), async (req, res) => 
 });
 
 // checking if email is available
-router.get("/email_available", checkQuery(["email"]), async (req, res) => {
+router.get("/email_available", [
+    query("email").trim().exists({checkFalsy:true}).withMessage("Email is required")
+], async (req, res) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
     const {email} = req.query;
     const trimmedEmail = email.trim();
-    const emailExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE email = ?", [trimmedEmail]);
-    if(emailExistResult[0].count == 0) {
+    const count = await User.count({
+        where:{
+            email:trimmedEmail
+        }
+    });
+    if(count == 0) {
         res.status(200).json({message:"This email is available"});
     } else {
         res.status(409).json({error:"This email is already exist"});
@@ -103,41 +124,59 @@ router.get("/email_available", checkQuery(["email"]), async (req, res) => {
 });
 
 // user registration
-router.post("/register_user", [checkBody(["email", "username", "country", "password"]),
-    body("email").trim().isLength({max:50}).withMessage("Is too long"),
-    body("email").trim().isEmail().withMessage("Is not correct"),
-    body("username").trim().isLength({max:50}).withMessage("Is too long"),
-    body("country").trim().isLength({max:50}).withMessage("Is too long"),
-    body("password").isLength({min:8}).withMessage("Is too short")
+router.post("/register_user", [
+    body("email").trim().exists({checkFalsy:true}).withMessage("Email is required").isLength({max:50}).withMessage("Max email length: 50").
+    isEmail().withMessage("Email is not correct"),
+    body("username").trim().exists({checkFalsy:true}).withMessage("Username is required").isLength({max:50}).withMessage("Max username length: 50"),
+    body("country").trim().exists({checkFalsy:true}).withMessage("Country is required").isLength({max:50}).withMessage("Max country length: 50"),
+    body("password").exists({checkFalsy:true}).isLength({min:8}).withMessage("Min password length: 8")
 ], async (req, res) => {
-    if(!validationResult(req).isEmpty()) {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
         return res.status(400).json({errors: errors.array()});
     }
     const {email, username, country, password} = req.body;
     const trimmedUsername = username.trim();
     const trimmedEmail = email.trim();
-    const checkEmailExistResult = await sqlQuery(res, "SELECT COUNT(email) as count FROM users WHERE email = ?", [trimmedEmail]);
-    if(checkEmailExistResult[0].count == 0) {
-        const checkUsernameExist = await sqlQuery(res, "SELECT COUNT(username) as count FROM users WHERE username = ?", [trimmedUsername]);
-        if(checkUsernameExist[0].count == 0) {
+    const emailExist = await User.count({
+        where:{
+            email:trimmedEmail
+        }
+    });
+    if(emailExist == 0) {
+        const usernameExist = await User.count({
+            where:{
+                username:trimmedEmail
+            }
+        });
+        if(usernameExist== 0) {
             // checking email verification
-            const checkEmailVerified = await sqlQuery(res, "SELECT verified FROM email_verifications WHERE email = ? AND verified = 1", [trimmedEmail]);
-            if(checkEmailVerified.length == 0) {
+            const emailVerified = await EmailVerification.count({
+                where:{
+                    email:trimmedEmail,
+                    verified:true
+                }
+            });
+            if(emailVerified == 0) {
                 // request email verification
                 await requestRegisterEmailVerification(res, trimmedEmail);
                 res.status(202).json({message:"Verification created waiting for verify email", verificationCreated:true});
             } else {
                 // register user
-                await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [trimmedEmail]);
-                const ID = nanoID.nanoid();
+                await EmailVerification.destroy({where:{email:trimmedEmail}});
                 const passwordHash = await bcrypt.hash(password, 12);
-                await sqlQuery(res, "INSERT INTO users() VALUES(?, ?, ?, ?, ?, 0, NULL)", [ID, trimmedEmail, trimmedUsername, country, passwordHash]);
+                const user = await User.create({
+                    email:trimmedEmail,
+                    username:trimmedUsername,
+                    country:country,
+                    passwordHash:passwordHash,
+                });
                 if(Number(process.env.CONSOLE_LOGS)) {
-                    console.log(`Created new user with account ID ${ID}`);
+                    console.log(`Created new user with account ID ${user.ID}`);
                 }
                 // sending email after registration
                 sendRegisterSucceedEmail(trimmedEmail, trimmedUsername);
-                res.status(201).json({message:"Registered successfully", ID:ID, registered:true});
+                res.status(201).json({message:"Registered successfully", ID:user.ID, registered:true});
             }
         } else {
             res.status(409).json({error:"This username is already taken"});
@@ -148,22 +187,26 @@ router.post("/register_user", [checkBody(["email", "username", "country", "passw
 });
 
 // email verification using sended by email code
-router.post("/verify_email", [checkBody(["email", "code"]), 
-    body("email").trim().isLength({max:50}).withMessage("Is too long"),
-    body("email").trim().isEmail().withMessage("Is not correct")
+router.post("/verify_email", [
+    body("email").trim().exists().withMessage("email is required").isLength({max:50}).withMessage("Email max length: 50").
+    isEmail().withMessage("email is not correct"),
+    body("code").exists().withMessage("code is required")
 ], async (req, res) => {
-    if(!validationResult(req).isEmpty()) {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
         return res.status(400).json({errors: errors.array()});
     }
     const {email, code} = req.body;
     const trimmedEmail = email.trim();
-    const verifyResult = await sqlQuery(res, "SELECT email, code_hash, expire_date FROM email_verifications WHERE email = ?", [trimmedEmail]);
-    if(verifyResult.length > 0) {
+    const verifyResult = await EmailVerification.findOne({attributes:["codeHash", "expireDate"], where:{email:trimmedEmail}});
+    if(verifyResult) {
         // checking expire date and code
-        const expireDate = new Date(verifyResult[0].expire_date);
-        if(expireDate.getTime() >= new Date()) {
-            if(await bcrypt.compare(code, verifyResult[0].code_hash)) {
-                await sqlQuery(res, "UPDATE email_verifications SET verified = 1 WHERE email = ?", [trimmedEmail]);
+        const expireDate = new Date(verifyResult.expireDate);
+        console.log(expireDate)
+        console.log(new Date())
+        if(expireDate.getTime() >= new Date().getTime()) {
+            if(await bcrypt.compare(code, verifyResult.codeHash)) {
+                await EmailVerification.update({verified:true}, {where:{email:trimmedEmail}});
                 res.status(200).json({message:"Verification succeed"});
             } else {
                 res.status(400).json({error:"Invalid code"});
@@ -177,32 +220,40 @@ router.post("/verify_email", [checkBody(["email", "code"]),
 });
 
 // user login
-router.post("/login_user", [checkBody(["email", "password", "autoLogin"]),
-    body("email").trim().isLength({max:50}).withMessage("Is too long"),
-    body("email").trim().isEmail().withMessage("Is not correct"),
+router.post("/login_user", [
+    body("email").trim().exists().withMessage("Email is required").isLength({max:50}).withMessage("Email max length: 50").
+    isEmail().withMessage("Email is not correct"),
+    body("password").exists({checkFalsy:true}).withMessage("Password is required"),
+    body("autoLogin").exists().withMessage("autoLogin is required")
 ], async (req, res) => {
-    if(!validationResult(req).isEmpty()) {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
         return res.status(400).json({errors: errors.array()});
     }
     const {email, password, autoLogin} = req.body;
     const trimmedEmail = email.trim();
-    const userResult = await sqlQuery(res, "SELECT ID, email, username, password_hash, double_verification FROM users WHERE email = ?", [trimmedEmail]);
-    if(userResult.length > 0) {
-        if(await bcrypt.compare(password, userResult[0].password_hash)) {
+    const user = await User.findOne({
+        attributes:["ID", "email", "username", "passwordHash", "doubleVerification"],
+        where:{
+            email:trimmedEmail
+        }
+    });
+    if(user) {
+        if(await bcrypt.compare(password, user.passwordHash)) {
             const payload = {
                 autoLogin:autoLogin ? 1 : 0,
-                userID:userResult[0].ID,
+                userID:user.ID,
             }
-            if(userResult[0].double_verification == 1) {
+            if(user.doubleVerification == 1) {
                 // checking email verification
-                const checkEmailVerified = await sqlQuery(res, "SELECT verified FROM email_verifications WHERE email = ? AND verified = 1", [trimmedEmail]);
-                if(checkEmailVerified.length == 0) {
+                const verified = await EmailVerification.count({where:{email:trimmedEmail, verified:true}});
+                if(verified == 0) {
                     // sending verification
                     await requestEmailDoubleVerification(res, trimmedEmail);
                     res.status(202).json({message:"Verification created waiting for verify email", verificationCreated:true});
                 } else {
                     // login user
-                    await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [trimmedEmail]);
+                    await EmailVerification.destroy({where:{email:trimmedEmail}});
                     createRefreshToken(res, payload);
                     res.status(200).json({message:"Logged successfully", session:payload})
                 }
@@ -222,17 +273,28 @@ router.post("/login_user", [checkBody(["email", "password", "autoLogin"]),
 // requesting user data by specific ID
 router.get("/user_data/:ID", async (req, res) => {
     const {ID} = req.params;
-    const userDataResult = await sqlQuery(res, "SELECT username, country, profile_description FROM users WHERE ID = ?", [ID]);
-    const userSocialLinksResult = await sqlQuery(res, "SELECT name, href FROM social_links WHERE ID_user = ?", [ID]);
-    const userSubscriptionsCountResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_user = ?", [ID]);
-    const userSubscribersCountResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_subscribed = ?", [ID]);
-    res.status(200).json({
-        message:"Retriviered user data",
-        user_data:userDataResult[0],
-        user_social_links:userSocialLinksResult,
-        subscriptionsCount:userSubscriptionsCountResult[0].count,
-        subscribersCount:userSubscribersCountResult[0].count,
+    const user = await User.findByPk(ID, {
+        attributes:["username", "country", "profileDescription"]
     });
+    const socialLinks = await SocialLink.findAll({
+        attributes:["name", "href"],
+        where:{
+            idUser:ID
+        }
+    });
+    const subscriptionsCount = await Subscription.count({where:{idUser:ID}});
+    const subscribersCount = await Subscription.count({where:{idSubscribed:ID}});
+    if(user) {
+        res.status(200).json({
+            message:"Retriviered user data",
+            user:user,
+            user_social_links:socialLinks,
+            subscriptionsCount:subscriptionsCount,
+            subscribersCount:subscribersCount,
+        });
+    } else {
+        res.status(404).json({error:"User not found"});
+    }
 });
 
 // requesting user profile picture
@@ -290,16 +352,24 @@ const getUserPicture = (res, ID) => {
 
 // requesting session user data (from ID in cookie)
 router.get("/my_data", async (req, res) => {
-    const userDataResult = await sqlQuery(res, "SELECT username, country, profile_description FROM users WHERE ID = ?", [req.session.userID]);
-    const userSocialLinks = await sqlQuery(res, "SELECT name, href FROM social_links WHERE ID_user = ?", [req.session.userID]);
-    const userSubscriptionsCountResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_user = ?", [req.session.userID]);
-    const userSubscribersCountResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM subscriptions WHERE ID_subscribed = ?", [req.session.userID]);
+    const ID = req.session.userID;
+    const user = await User.findByPk(ID, {
+        attributes:["username", "country", "profileDescription"]
+    });
+    const socialLinks = await SocialLink.findAll({
+        attributes:["name", "href"],
+        where:{
+            idUser:ID
+        }
+    });
+    const subscriptionsCount = await Subscription.count({where:{idUser:ID}});
+    const subscribersCount = await Subscription.count({where:{idSubscribed:ID}});
     res.status(200).json({
-        message:"Retriviered data",
-        user_data:userDataResult[0],
-        user_social_links:userSocialLinks,
-        subscriptionsCount:userSubscriptionsCountResult[0].count,
-        subscribersCount:userSubscribersCountResult[0].count
+        message:"Retriviered user data",
+        user:user,
+        user_social_links:socialLinks,
+        subscriptionsCount:subscriptionsCount,
+        subscribersCount:subscribersCount,
     });
 });
 
@@ -318,22 +388,23 @@ router.post("/upload_profile_picture", profileImageUpload.single("file"), async 
 
 
 // email updation on session user
-router.put("/update_email", [checkBody(["newEmail", "password"]),
-    body("newEmail").trim().isLength({max:50}).withMessage("Email too long"),
-    body("newEmail").trim().isEmail().withMessage("Is not correct"),
-    body("password").trim().isLength({min:8}).withMessage("Is too short")
+router.put("/update_email", [
+    body("newEmail").trim().exists({checkFalsy:true}).withMessage("newEmail is required").isLength({max:50}).withMessage("newEmail max length: 50").
+    isEmail().withMessage("newEmail is not correct"),
+    body("password").exists({checkFalsy:true}).withMessage("password is required")
 ], async (req, res) => {
-    if(!validationResult(req).isEmpty()) {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
         return res.status(400).json({errors: errors.array()});
     }
     const {newEmail, password} = req.body;
     const newEmailTrimmed = newEmail.trim();
-    const emailExistResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM users WHERE email = ?", [newEmailTrimmed]);
-    if(emailExistResult[0].count == 0) {
-        const actualUserResult = await sqlQuery(res, "SELECT password_hash FROM users WHERE ID = ?", [req.session.ID]);
-        if(await bcrypt.compare(password, actualUserResult[0].password_hash)) {
-            const updateResult = await sqlQuery(res, "UPDATE users SET email = ? WHERE ID", [newEmailTrimmed, req.session.ID]);
-            res.status(200).json({message:"Email update succeed", updated:updateResult.affectedRows});
+    const emailExist = await User.count({where:{email:newEmailTrimmed}});
+    if(emailExist == 0) {
+        const actualUser = await User.findByPk(req.session.userID, {attributes:["passwordHash"]});
+        if(await bcrypt.compare(password, actualUser.passwordHash)) {
+            const [affectedRows] = await User.update({email:newEmailTrimmed}, {where:{id:req.session.userID}});
+            res.status(200).json({message:"Email update succeed", affectedRows});
         } else {
             res.status(400).json({error:"Invalid password"});
         }
@@ -343,50 +414,49 @@ router.put("/update_email", [checkBody(["newEmail", "password"]),
 });
 
 // password updation on session user
-router.put("/update_password", [checkBody(["newPassword"]),
-    body("newPassword").isLength({min:8}).withMessage("Is too short")
+router.put("/update_password", [
+    body("newPassword").exists({checkFalsy:true}).withMessage("password is required").isLength({min:8}).withMessage("password min length: 8")
 ], async (req, res) => {
-    if(!validationResult(req).isEmpty()) {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
         return res.status(400).json({errors: errors.array()});
     }
     const {newPassword} = req.body;
-    const actualUserResult = await sqlQuery(res, "SELECT email FROM users WHERE ID = ?", [req.session.userID]);
-    const email = actualUserResult[0].email;
+    const user = await User.findByPk(req.session.userID, {attributes:["email"]});
     // checking email verification
-    const checkEmailVerified = await sqlQuery(res, "SELECT verified FROM email_verifications WHERE email = ? AND verified = 1", [email]);
-    if(checkEmailVerified.length == 0) {
+    const emailVerified = await EmailVerification.count({where:{email:user.email, verified:true}})
+    if(emailVerified == 0) {
         // sending verification
-        await requestPasswordChangeEmailVerification(res, email);
+        await requestPasswordChangeEmailVerification(res, user.email);
         res.status(202).json({message:"Verification created waiting for verify email", verificationCreated:true});
     } else {
         // changing password
-        await sqlQuery(res, "DELETE FROM email_verifications WHERE email = ?", [email]);
+        await EmailVerification.destroy({where:{email:user.email}});
         const newPasswordHash = bcrypt.hashSync(newPassword, 12);
-        const updateResult = await sqlQuery(res, "UPDATE users SET password_hash = ? WHERE ID = ?", [newPasswordHash, req.session.userID]);
-        res.status(200).json({message:"Password update succeed", updated:updateResult.affectedRows});
+        const [affectedRows] = await User.update({passwordHash:newPasswordHash}, {where:{id:req.session.userID}})
+        res.status(200).json({message:"Password update succeed", affectedRows});
     }
 });
 
 
 // request profile update on session user
-router.put("/update_profile", [checkBody(["username", "country", "doubleVerification", "profileDescription"]),
-    body("username").trim().isLength({max:50}).withMessage("Is too long"),
-    body("country").trim().isLength({max:50}).withMessage("Is too long"),
-    body("profileDescription").isLength({max:255}).withMessage("Is too long"),
+router.put("/update_profile", [
+    body("username").trim().exists({checkFalsy:true}).withMessage("username is required").isLength({max:50}).withMessage("username max length: 50"),
+    body("country").trim().exists({checkFalsy:true}).withMessage("country is required").isLength({max:50}).withMessage("country max length: 50"),
+    body("profileDescription").exists({checkFalsy:true}).withMessage("profileDescription is required").isLength({max:255}).withMessage("profileDescription max length: 255"),
 ], async (req, res) => {
-    if(!validationResult(req).isEmpty()) {
-        return res.status(400).json({errors: errors.array()});
-    }
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+    if(!errors.isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
     }
     const {username, country, doubleVerification, profileDescription} = req.body;
     const trimmedUsername = username.trim();
-    const usernameExistResult = await sqlQuery("SELECT COUNT(ID) as count FROM users WHERE username = ?", [trimmedUsername]);
-    if(usernameExistResult[0].count == 0) {
-        const updateResult = await sqlQuery(res, "UPDATE users SET username = ?, country = ?, double_verification = ?, profile_description = ? WHERE ID = ?", [trimmedUsername, country, doubleVerification ? "1" : "0", profileDescription, req.session.userID]);
-        res.status(200).json({message:"Profile updated", updated:updateResult.affectedRows});
+    const usernameExist = await User.count({where:{username:trimmedUsername}});
+    if(usernameExist == 0) {
+        const [affectedRows] = await User.update({username:trimmedUsername, country, profileDescription, doubleVerification}, 
+            {where:{id:req.session.userID}}
+        )
+        res.status(200).json({message:"Profile updated", affectedRows});
     } else {
         res.status(409).json({error:"This username is already exist"});
     }
@@ -394,18 +464,25 @@ router.put("/update_profile", [checkBody(["username", "country", "doubleVerifica
 
 
 // request profile delete (protected using password)
-router.delete("/delete_profile", checkBody(["password"]), async (req, res) => {
+router.delete("/delete_profile", [
+    body("password").exists({checkFalsy:true}).withMessage("password is required")
+], async (req, res) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
     const {password} = req.body;
-    const userResult = await sqlQuery(res, "SELECT password_hash FROM users WHERE ID = ?", [req.session.userID]);
-    if(userResult.length > 0) {
-        if(await(bcrypt.compare(password, userResult[0].password_hash))) {
-            const deleteResult = await sqlQuery(res, "DELETE FROM users WHERE ID = ?", [req.session.userID]);
+    const ID = req.session.userID;
+    const user = await User.findByPk(ID, {attributes:["passwordHash"]});
+    if(user) {
+        if(await(bcrypt.compare(password, user.password_hash))) {
+            const affectedRows = await User.destroy({where:{id:ID}})
             if(Number(process.env.CONSOLE_LOGS)) {
-                console.log(`Deleted user account ID ${req.session.userID}`);
+                console.log(`Deleted user account ID ${ID}`);
             }
             res.clearCookie("ACCESS_TOKEN");
             res.clearCookie("REFRESH_TOKEN");
-            res.status(200).json({message:"Delete succeed", deleted:deleteResult.affectedRows});
+            res.status(200).json({message:"Delete succeed", affectedRows});
         } else {
             res.status(403).json({error:"Invalid password"});
         }

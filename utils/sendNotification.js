@@ -1,11 +1,19 @@
 
 const {DateTime} = require("luxon");
-const nanoID = require("nanoid");
-const sqlQuery = require("../utils/mysqlQuery");
+
+const Notification = require("../models/Notification");
 
 const sendNotification = async (res, title, href = null, ID_user) => {
-    await sqlQuery(res, "INSERT INTO notifications() VALUES(?, ?, ?, ?)",
-         [nanoID.nanoid(), DateTime.utc().toFormat("yyyy-MM-dd HH:mm:ss"), title, false, href, ID_user]);
+    try {
+        await Notification.create({
+            send_date:DateTime.utc().toJSDate(),
+            title,
+            href,
+            ID_user
+        });
+    } catch (err) {
+        res.status(500).json({error:"Sending notification error"});
+    }
 }
 
 module.exports = sendNotification;
