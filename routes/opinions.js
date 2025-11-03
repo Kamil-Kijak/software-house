@@ -86,7 +86,6 @@ router.put("/update_opinion", [
     }
     const {idOpinion, rating, comment} = req.body;
     const trimmedComment = comment.trim();
-
     const opinionOwnership = await Opinion.count({where:{idOpinion, idUser:req.session.userID}});
     if(opinionOwnership >= 1) {
         const [affectedRows] = await Opinion.update({rating, comment:trimmedComment, uploadDate:DateTime.utc().toJSDate(), edited:true}, {where:{id:idOpinion}})

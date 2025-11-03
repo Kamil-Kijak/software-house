@@ -408,7 +408,7 @@ router.post("/upload_application", [
     const trimmedName = name.trim();
     const app = await Application.create({
         name:trimmedName,
-        description,
+        description:description.trim(),
         updateDate:DateTime.utc().toJSDate(),
         status,
         idUser:req.session.userID

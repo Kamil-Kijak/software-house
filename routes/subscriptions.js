@@ -172,7 +172,6 @@ router.post("/toggle_subscription", [
             idSubscribed:idUser
         })
         // sending notification
-
         const userResult = await User.findByPk(req.session.userID, {attributes:["username"]});
         await sendNotification(res, `User ${userResult.username} is now subscribing you`, null, idUser);
         res.status(201).json({message:"New subscription Created"});
