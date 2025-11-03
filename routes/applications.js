@@ -90,23 +90,27 @@ router.get("/app_data", [
             attributes:["name"]
         }
     });
-    const appScreens = await AppScreen.findAll({
-        attributes:["id", "description"],
-        where:{
-            idApplication
-        }
-    });
-    const opinionsAvg = await Opinion.findAll({
-        attributes:[[Sequelize.fn("AVG", Sequelize.col("rating")), "avg"]],
-        where:{
-            idApplication
-        }
-    })
-    res.status(200).json({message:"Retriviered app data", data:{
-        application,
-        appScreens,
-        rating:opinionsAvg || 0
-    }});
+    if(application) {
+        const appScreens = await AppScreen.findAll({
+            attributes:["id", "description"],
+            where:{
+                idApplication
+            }
+        });
+        const opinionsAvg = await Opinion.findAll({
+            attributes:[[Sequelize.fn("AVG", Sequelize.col("rating")), "avg"]],
+            where:{
+                idApplication
+            }
+        })
+        res.status(200).json({message:"Retriviered app data", data:{
+            application,
+            appScreens,
+            rating:opinionsAvg || 0
+        }});
+    } else {
+        res.status(404).json({error:"application doesn't exist"})
+    }
 });
 
 // requesting user applications filtered by name_filter
@@ -303,7 +307,7 @@ router.get("/my_applications", [
     query("nameFilter").exists().withMessage("nameFilter is required"),
     query("statusFilter").exists().withMessage("statusFilter is required").isWhitelisted(["release", "early-access", "beta-tests"]).withMessage("statusFilter can be release, early-access, beta-tests"),
     query("tagsFilter").exists({checkFalsy:true}).withMessage("tagsFilter is required").isArray().withMessage("tagsFilter type: array"),
-    query("downloadsFilter").exists().withMessage("downloadsFilter is required"),
+    query("downloadsFilter").exists().withMessage("downloadsFilter is required").isBoolean().withMessage("downloadsFilter type: boolean"),
     query("limit").exists().withMessage("limit is required")
 ], async (req, res) => {
     const errors = validationResult(req);
@@ -391,7 +395,7 @@ router.post("/upload_app_file", [appFileUpload.single("file"),
 });
 
 // request insert application empty sketch
-router.post("/upload_application", [checkBody(["name", "description", "status"]),
+router.post("/upload_application", [
     body("name").trim().exists({checkFalsy:true}).withMessage("name is required").isLength({min:1, max:25}).withMessage("name length between 1 and 25"),
     body("description").exists().withMessage("description is required").isLength({max:65535}).withMessage("description max length: 65535"),
     body("status").exists({checkFalsy:true}).withMessage("status is required").isWhitelisted(["release","early-access","beta-tests"]).withMessage("status can be release, early-access, beta-tests")
@@ -416,20 +420,35 @@ router.post("/upload_application", [checkBody(["name", "description", "status"])
 });
 
 // change visibility to public/private
-router.put("/change_public", checkBody(["IDApplication", "public"]), async (req, res) => {
-    const {IDApplication, public} = req.body;
-    const applicationOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM applications WHERE ID = ? AND ID_user = ?", [IDApplication, req.session.userID]);
-    if(applicationOwnershipResult[0].count >= 1) {
-        await sqlQuery(res, "UPDATE applications SET public = ? WHERE ID = ?", [public ? "1" : "0", IDApplication]);
+router.put("/change_public", [
+    body("idApplication").exists({checkFalsy:true}).withMessage("idApplication is required"),
+    body("public").exists().withMessage("public is required").isBoolean().withMessage("public type: boolean")
+], async (req, res) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
+    const {idApplication, public} = req.body;
+    const applicationOwnership = await Application.count({where:{id:idApplication, idUser:req.session.userID}});
+    if(applicationOwnership >= 1) {
+        await Application.update({public:public ? "1" : "0"}, {where:{id:idApplication}});
         // sending notification about uploaded application
         if(Number(public) == 1) {
-            const usersResult = await sqlQuery(res, "SELECT ID_user FROM subscriptions WHERE notifications != 'none' AND ID_subscribed = ?", [req.session.userID]);
-            const usernameResult = await sqlQuery(res, "SELECT username FROM users WHERE ID = ?", [req.session.userID]);
-            for(const userID in usersResult) {
-                sendNotification(res, `New publish by ${usernameResult[0].username}`, null, userID.ID_user);
+            const users = await Subscription.findAll({
+                attributes:["idUser"],
+                where:{
+                    idSubscribed:req.session.userID,
+                    notifications:{
+                        [Op.ne]:'none'
+                    }
+                }
+            });
+            const actualUser = await User.findByPk(req.session.userID, {attributes:["username"]});
+            for(const user in users) {
+                sendNotification(res, `New publish by ${actualUser.username}`, null, user.idUser);
             }
             if(Number(process.env.CONSOLE_LOGS)) {
-                console.log(`New publish ID app ${IDApplication}`);
+                console.log(`New publish ID app ${idApplication}`);
             }
         }
         res.status(200).json({message:"Changed successfully"});
@@ -439,30 +458,33 @@ router.put("/change_public", checkBody(["IDApplication", "public"]), async (req,
 });
 
 // update application by ID
-router.put("/update_application", [checkBody(["IDApplication", "name", "description", "status"]),
-    body("name").trim().isLength({min:1, max:25}).withMessage("Must be in length between 1 and 25"),
-    body("description").isLength({max:65535}).withMessage("Is too long"),
-    body("status").isWhitelisted(["release","early-access","beta-tests"]).withMessage("Is not match release, early-access or beta-tests")
+router.put("/update_application", [
+    body("name").trim().exists({checkFalsy:true}).withMessage("name is required").isLength({min:1, max:25}).withMessage("name length between 1 and 25"),
+    body("description").trim().exists({checkFalsy:true}).withMessage("description is required").isLength({min:1, max:65535}).withMessage("description length between 1 and 65535"),
+    body("status").exists({checkFalsy:true}).withMessage("status is required").isWhitelisted(["release","early-access","beta-tests"]).withMessage("status can be release, early-access and beta-tests")
 ], async (req, res) => {
-    if(!validationResult(req).isEmpty()) {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
         return res.status(400).json({errors: errors.array()});
     }
-    const {IDApplication, name, description, status} = req.body;
-    const applicationOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM applications WHERE ID = ? AND ID_user = ?", [IDApplication, req.session.userID]);
-    if(applicationOwnershipResult[0].count >= 1) {
-        const updateResult = await sqlQuery(res, "UPDATE applications SET name = ?, description = ?, status = ?, update_date = ? WHERE ID = ?", [name, description, status, DateTime.utc().toFormat("yyyy-MM-dd HH:mm:ss"), IDApplication]);
-        res.status(200).json({message:"Updated successfully", updated:updateResult.affectedRows});
+    const {idApplication, name, description, status} = req.body;
+    const applicationOwnership = await Application.count({where:{id:idApplication, idUser:req.session.userID}});
+    if(applicationOwnership >= 1) {
+        const [affectedRows] = await Application.update({name:name.trim(), description:description.trim(), status, updateDate:DateTime.utc().toJSDate()}, {where:{id:idApplication}});
+        res.status(200).json({message:"Updated successfully", affectedRows});
     } else {
         res.status(403).json({error:"You don't have permission for delete this resource"});
     }
 });
 
-router.delete("/delete_application", checkBody(["IDApplication"]), async (req, res) => {
-    const {IDApplication} = req.body;
-    const applicationOwnershipResult = await sqlQuery(res, "SELECT COUNT(ID) as count FROM applications WHERE ID = ? AND ID_user = ?", [IDApplication, req.session.userID]);
-    if(applicationOwnershipResult[0].count >= 1) {
-        const deleteResult = await sqlQuery(res, "DELETE FROM applications WHERE ID = ?", [IDApplication]);
-        res.status(200).json({message:"Delete successfully", updated:deleteResult.affectedRows});
+router.delete("/delete_application", [
+    body("idApplication").exists({checkFalsy:true}).withMessage("idApplication is required")
+], async (req, res) => {
+    const {idApplication} = req.body;
+    const applicationOwnership = await Application.count({where:{id:idApplication, idUser:req.session.userID}});
+    if(applicationOwnership >= 1) {
+        const affectedRows = await Application.destroy({where:{id:idApplication}});
+        res.status(200).json({message:"Delete successfully", affectedRows});
     } else {
         res.status(403).json({error:"You don't have permission for delete this resource"});
     }
