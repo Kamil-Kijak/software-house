@@ -1,18 +1,21 @@
 
 
 const express = require("express");
-const nanoID = require("nanoid");
 const path = require("path");
 const fs = require("fs");
 
-const checkBody = require("../utils/checkBody");
-const sqlQuery = require("../utils/mysqlQuery");
 const authorization = require("../utils/authorization");
 const sendNotification = require("../utils/sendNotification");
 const {appImageUpload, appFileUpload} = require("../utils/multerUploads");
 const { DateTime } = require("luxon");
-const checkQuery = require("../utils/checkQuery");
-const { validationResult, body } = require("express-validator");
+const { validationResult, body, query } = require("express-validator");
+
+const Application = require("../models/Application");
+const AppTag = require("../models/AppTag");
+const AppScreen = require("../models/AppScreen");
+const Opinion = require("../models/Opinion");
+const { Sequelize, Op } = require("sequelize");
+const User = require("../models/User");
 
 const router = express.Router();
 
@@ -22,141 +25,199 @@ const router = express.Router();
 */
 
 // requesting app image using app ID
-router.get("/app_image", checkQuery(["IDApplication"]), async (req, res) => {
-    const {IDApplication} = req.query;
-    const IDuserResult = await sqlQuery(res, "SELECT ID_user FROM applications WHERE ID = ?", [IDApplication]);
-    const filePath = path.join(process.cwd(), "files", `${IDuserResult[0].ID_user}`, "apps", `${IDApplication}`);
-    const directory = fs.readdirSync(filePath);
-    const image = directory.find((obj) => obj.startsWith("app."));
-    if(image == undefined) {
-        res.status(200).sendFile(path.join(process.cwd(), "assets", "defaultAppImage.png"));
+router.get("/app_image", [
+    query("idApplication").exists({checkFalsy:true}).withMessage("idApplication is required")
+], async (req, res) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
+    const {idApplication} = req.query;
+    const application = await Application.findByPk(idApplication, {attributes:["idUser"]});
+    if(application) {
+        const filePath = path.join(process.cwd(), "files", `${application.idUser}`, "apps", `${idApplication}`);
+        const directory = fs.readdirSync(filePath);
+        const image = directory.find((obj) => obj.startsWith("app."));
+        if(image == undefined) {
+            res.status(200).sendFile(path.join(process.cwd(), "assets", "defaultAppImage.png"));
+        } else {
+            res.status(200).sendFile(path.join(filePath, image));
+        }
     } else {
-        res.status(200).sendFile(path.join(filePath, image));
+        res.status(404).json({error:"Application not found"});
     }
 });
 
 // requesting app download file using app ID
-router.get("/app_file", checkQuery(["IDApplication"]), async (req, res) => {
-    const {IDApplication} = req.query;
-    const appDataResult = await sqlQuery(res, "SELECT ID_user, app_file FROM applications WHERE ID = ?", [IDApplication]);
-    const filePath = path.join(process.cwd(), "files", `${appDataResult[0].ID_user}`, "apps", `${IDApplication}`);
-    const directory = fs.readdirSync(filePath);
-    const file = directory.find((obj) => obj.startsWith(appDataResult[0].app_file));
-    if(file == undefined) {
-        res.status(404).json({error:"File not found"})
+router.get("/app_file", [
+    query("idApplication").exists({checkFalsy:true}).withMessage("idApplication is required")
+], async (req, res) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
+    const {idApplication} = req.query;
+    const application = await Application.findByPk(idApplication, {attributes:["idUser", "appFile"]});
+    if(application) {
+        const filePath = path.join(process.cwd(), "files", `${application.idUser}`, "apps", `${idApplication}`);
+        const directory = fs.readdirSync(filePath);
+        const file = directory.find((obj) => obj.startsWith(application.appFile));
+        if(file == undefined) {
+            res.status(404).json({error:"File not found"})
+        } else {
+            res.status(200).sendFile(path.join(filePath, file));
+        }
     } else {
-        res.status(200).sendFile(path.join(filePath, file));
+        res.status(404).json({error:"Application not found"});
     }
 });
 
 // requesting application detailed data, also tags and screenshot IDs
-router.get("/app_data", checkQuery(["IDApplication"]), async (req, res) => {
-    const {IDApplication} = req.query;
-    const infoResult = await sqlQuery(res, "SELECT name, description, status, public, downloads, app_file FROM applications WHERE ID = ?", [IDApplication]);
-    const tagsResult = await sqlQuery(res, "SELECT name FROM app_tags WHERE ID_application = ?", [IDApplication]);
-    const tagsArray = tagsResult.map((obj) => obj.name);
-    const screensResult = await sqlQuery(res, "SELECT ID, description FROM app_screens WHERE ID_application = ?", [IDApplication]);
-    const opinionsAvgResult = await sqlQuery(res, "SELECT AVG(rating) as avg FROM opinions WHERE ID_application = ?", [IDApplication]);
-    res.status(200).json({message:"Retriviered app data", application:{
-        ...infoResult[0],
-        tags:tagsArray,
-        screens:screensResult,
-        rating:opinionsAvgResult[0].avg || 0
+router.get("/app_data", [
+    query("idApplication").exists({checkFalsy:true}).withMessage("idApplication is required")
+], async (req, res) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
+    const {idApplication} = req.query;
+    const application = await Application.findByPk(idApplication, {
+        attributes:["name", "description", "status", "public", "downloads", "appFile"],
+        include:{
+            model:AppTag,
+            as:"appTags",
+            attributes:["name"]
+        }
+    });
+    const appScreens = await AppScreen.findAll({
+        attributes:["id", "description"],
+        where:{
+            idApplication
+        }
+    });
+    const opinionsAvg = await Opinion.findAll({
+        attributes:[[Sequelize.fn("AVG", Sequelize.col("rating")), "avg"]],
+        where:{
+            idApplication
+        }
+    })
+    res.status(200).json({message:"Retriviered app data", data:{
+        application,
+        appScreens,
+        rating:opinionsAvg || 0
     }});
 });
 
 // requesting user applications filtered by name_filter
-router.get("/user_applications", checkQuery(["IDuser", "nameFilter", "limit"]), async (req, res) => {
-    const {IDUser, nameFilter, limit} = req.query;
-    const applicationsResult = await sqlQuery(res, "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ? AND a.name LIKE ? ORDER BY a.downloads DESC", [IDUser, `%${nameFilter}%`, limit || "200"]);
-    const appRatingAvgResult = await sqlQuery(res, "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application WHERE a.ID_user = ? AND a.name LIKE ? GROUP BY a.ID ORDER BY a.downloads DESC LIMIT ?", [IDUser, `%${nameFilter}%`, limit || "200"]);
-    const ratingAverages = {};
-    appRatingAvgResult.forEach((obj) => ratingAverages[obj.ID] = obj.rating);
-    const finalResult = [];
-    applicationsResult.forEach((obj) => {
-        const object = finalResult.find((value) => value.ID === obj.ID)
-        if(object == undefined) {
-            finalResult.push({
-                ID:obj.ID,
-                name:obj.name,
-                updateDate:DateTime.fromSQL(obj.update_date).toUTC().toISO(),
-                public:obj.public,
-                downloads:obj.downloads,
-                description:obj.description,
-                rating:ratingAverages[obj.ID] || 0,
-                tags:[obj.tag]
-            });
-        } else {
-            object.tags.push(obj.tag);
+router.get("/user_applications", [
+    query("idUser").exists({checkFalsy:true}).withMessage("idUser is required"),
+    query("nameFilter").exists().withMessage("nameFilter is required"),
+    query("limit").exists().withMessage("limit is required")
+], async (req, res) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
+    }
+    const {idUser, nameFilter, limit} = req.query;
+    const applications = await Application.findAll({
+        attributes: ["id", "name", "updateDate", "status", "public", "downloads", "description"],
+        include:{
+            model:AppTag,
+            as:"appTags",
+            attributes:["name"]
+        },
+        where: {
+            idUser,
+            name: {
+                [Op.like]: `%${nameFilter}%`
+            }
+        },
+        order: [["downloads", "DESC"]],
+        ...(limit ? { limit } : { limit: 200 })
+    });
+    const ratings = await Opinion.findAll({
+        attributes:["idApplication", [Sequelize.fn("AVG", Sequelize.col("rating")), "rating"]],
+        group:["idApplication"],
+        where:{
+            idApplication:{
+                [Op.in]:applications.map((obj) => obj.id)
+            }
         }
     });
-    res.status(200).json({message:"Retriviered applications", applications:finalResult});
+    const ratingMap = new Map(
+        ratings.map((obj) => [obj.idApplication, obj.rating])
+    );
+    applications.forEach((app) => app.rating = ratingMap.get(app.id) ?? 0)
+    res.status(200).json({message:"Retriviered applications", applications});
 });
 
 
 // requesting all applications using specific filters
-router.get("/applications", checkQuery(["usernameFilter", "nameFilter", "statusFilter", "tagsFilter", "downloadsFilter", "limit"]), async (req, res) => {
-    const {usernameFilter, nameFilter, statusFilter, tagsFilter, downloadsFilter, limit} = req.body;
-    let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag, u.ID as userID, u.username FROM applications a INNER JOIN users u ON u.ID=a.ID_user INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.public = 1";
-    let ratingsSqlString = "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application INNER JOIN users u u.ID=a.ID_user WHERE a.public = 1 AND a.name LIKE ?";
-    const params = [];
-    const ratingsParams = [`%${nameFilter}%`];
-    if(tagsFilter) {
-        if(tagsFilter.length > 0) {
-            sqlString+= ` AND at.name IN (${tagsFilter.map(obj => "?").join(", ")})`;
-            params.push(...tagsFilter);
-        }
+router.get("/applications", [
+    query("usernameFilter").exists().withMessage("usernameFilter is required"),
+    query("nameFilter").exists().withMessage("nameFilter is required"),
+    query("statusFilter").exists().withMessage("statusFilter is required").isWhitelisted(["release", "early-access", "beta-tests"]).withMessage("statusFilter can be release, early-access, beta-tests"),
+    query("tagsFilter").exists({checkFalsy:true}).withMessage("tagsFilter is required").isArray().withMessage("tagsFilter type: array"),
+    query("downloadsFilter").exists().withMessage("downloadsFilter is required"),
+    query("limit").exists().withMessage("limit is required")
+], async (req, res) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
     }
-    if(statusFilter) {
-        sqlString+=" AND a.status = ?";
-        ratingsSqlString += " AND a.status = ?";
-        params.push(statusFilter);
-        ratingsParams.push(statusFilter);
-    }
-    sqlString+=" AND a.name LIKE ? AND u.username LIKE ?";
-    params.push(`%${nameFilter}%`, `%${usernameFilter}%`);
+    const {usernameFilter, nameFilter, statusFilter, tagsFilter, downloadsFilter, limit} = req.query;
+    const applications = await Application.findAll({
+        attributes: ["id", "name", "updateDate", "status", "public", "downloads", "description", "idUser"],
+        include:{
+            model:AppTag,
+            as:"appTags",
+            attributes:["name"],
+            ...(tagsFilter.length > 0 && {
+                where:{
+                    name:{
+                        [Op.in]:tagsFilter
+                    }
+                }
+            })
+        },
+        where: {
+            name: {
+                [Op.like]: `%${nameFilter}%`
+            },
+            ...(statusFilter && {status:statusFilter}),
 
-    ratingsSqlString+= " AND u.username LIKE ?";
-    params.push(`%${usernameFilter}%`);
-
-    ratingsSqlString += " GROUP BY a.ID";
-    if(downloadsFilter) {
-        sqlString+=" ORDER BY a.downloads";
-        ratingsSqlString +=" ORDER BY a.downloads";
-    } else {
-        sqlString+=" ORDER BY a.downloads DESC";
-        ratingsSqlString +=" ORDER BY a.downloads DESC";
-    }
-    sqlString += " LIMIT ?";
-    params.push(limit || "200");
-    ratingsSqlString += " LIMIT ?";
-    ratingsParams.push(limit || "200");
-    const applicationsResult = await sqlQuery(res, sqlString, params);
-    const appRatingAvgResult = await sqlQuery(res, ratingsSqlString, ratingsParams);
-
-    const ratingAverages = {};
-    appRatingAvgResult.forEach((obj) => ratingAverages[obj.ID] = obj.rating);
-    const finalResult = [];
-    applicationsResult.forEach((obj) => {
-        const object = finalResult.find((value) => value.ID === obj.ID)
-        if(object == undefined) {
-            finalResult.push({
-                ID:obj.ID,
-                name:obj.name,
-                updateDate:DateTime.fromSQL(obj.update_date).toUTC().toISO(),
-                public:obj.public,
-                downloads:obj.downloads,
-                description:obj.description,
-                userID:obj.userID,
-                username:obj.username,
-                rating:ratingAverages[obj.ID] || 0,
-                tags:[obj.tag]
-            });
-        } else {
-            object.tags.push(obj.tag);
+        },
+        order: [["downloads", downloadsFilter ? "ASC" : "DESC"]],
+        ...(limit ? { limit } : { limit: 200 })
+    });
+    const ratings = await Opinion.findAll({
+        attributes:["idApplication", [Sequelize.fn("AVG", Sequelize.col("rating")), "rating"]],
+        group:["idApplication"],
+        where:{
+            idApplication:{
+                [Op.in]:applications.map((obj) => obj.id)
+            }
         }
     });
-    res.status(200).json({message:"Retriviered applications", applications:finalResult});
+    const ratingMap = new Map(
+        ratings.map((obj) => [obj.idApplication, obj.rating])
+    );
+    applications.forEach((app) => app.rating = ratingMap.get(app.id) ?? 0)
+    const users = await User.findAll({
+        attributes:["id", "username"],
+        where:{
+            username:{
+                [Op.like]:`%${usernameFilter}%`
+            }
+        }
+    });
+    const filteredApplications = applications.filter((app) => users.map(user => user.id).includes(app.idUser));
+    const usersMap = new Map(
+        users.map(obj => [obj.id, {user: obj.id, user: obj.username}])
+    )
+    filteredApplications.forEach((app) => app.user = usersMap.get(app.idUser) ?? null)
+
+    res.status(200).json({message:"Retriviered applications", applications:filteredApplications});
 });
 
 router.use(authorization());
@@ -228,74 +289,58 @@ router.get("/subscribed_applications", checkQuery(["usernameFilter", "nameFilter
 });
 
 // requesting session user applications by specific filters
-router.get("/my_applications", checkQuery(["usernameFilter", "nameFilter", "statusFilter", "tagsFilter", "downloadsFilter", "limit"]), async (req, res) => {
-    // retrive user applications using filters
-    const {nameFilter, statusFilter, publicFilter, tagsFilter, downloadsFilter} = req.query;
-    let sqlString = "SELECT a.ID, a.name, a.update_date, a.status, a.public, a.downloads, a.description, at.name as tag FROM applications a INNER JOIN app_tags at ON at.ID_application=a.ID WHERE a.ID_user = ?";
-    let ratingsSqlString = "SELECT AVG(o.rating) as rating, a.ID FROM opinions o INNER JOIN applications a ON a.ID=o.ID_application WHERE a.ID_user = ?";
-    const params = [req.session.userID];
-    const ratingsParams = [req.session.userID];
-    if(tagsFilter) {
-        if(tagsFilter.length > 0) {
-            sqlString+= ` AND at.name IN (${tagsFilter.map(obj => "?").join(", ")})`;
-            params.push(...tagsFilter);
-        }
+router.get("/my_applications", [
+    query("nameFilter").exists().withMessage("nameFilter is required"),
+    query("statusFilter").exists().withMessage("statusFilter is required").isWhitelisted(["release", "early-access", "beta-tests"]).withMessage("statusFilter can be release, early-access, beta-tests"),
+    query("tagsFilter").exists({checkFalsy:true}).withMessage("tagsFilter is required").isArray().withMessage("tagsFilter type: array"),
+    query("downloadsFilter").exists().withMessage("downloadsFilter is required"),
+    query("limit").exists().withMessage("limit is required")
+], async (req, res) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) {
+        return res.status(400).json({errors: errors.array()});
     }
-    if(publicFilter) {
-        sqlString+=" AND a.public = ?";
-        params.push(publicFilter);
-        ratingsSqlString+= " AND a.public = ?";
-        ratingsParams.push(publicFilter);
-    }
-    if(statusFilter) {
-        sqlString+=" AND a.status = ?";
-        params.push(statusFilter);
-        ratingsSqlString+= " AND a.status = ?";
-        ratingsParams.push(statusFilter);
-    }
-    sqlString+=" AND a.name LIKE ?";
-    params.push(`%${nameFilter}%`);
+    const {nameFilter, statusFilter, tagsFilter, downloadsFilter, limit} = req.query;
+    const applications = await Application.findAll({
+        attributes: ["id", "name", "updateDate", "status", "public", "downloads", "description", "idUser"],
+        include:{
+            model:AppTag,
+            as:"appTags",
+            attributes:["name"],
+            ...(tagsFilter.length > 0 && {
+                where:{
+                    name:{
+                        [Op.in]:tagsFilter
+                    }
+                }
+            })
+        },
+        where: {
+            name: {
+                [Op.like]: `%${nameFilter}%`
+            },
+            idUser:req.session.userID,
+            ...(statusFilter && {status:statusFilter}),
 
-    ratingsSqlString+= " AND a.name LIKE ?";
-    ratingsParams.push(`%${nameFilter}%`);
-
-    ratingsSqlString += " GROUP BY a.ID";
-    if(downloadsFilter) {
-        sqlString+=" ORDER BY a.downloads";
-        ratingsSqlString +=" ORDER BY a.downloads";
-    } else {
-        sqlString+=" ORDER BY a.downloads DESC";
-        ratingsSqlString +=" ORDER BY a.downloads DESC";
-    }
-
-    sqlString += " LIMIT ?";
-    params.push(limit || "200");
-    ratingsSqlString += " LIMIT ?";
-    ratingsParams.push(limit || "200");
-    const applicationsResult = await sqlQuery(res, sqlString, params);
-    const appRatingAvgResult = await sqlQuery(res, ratingsSqlString, ratingsParams);
-
-    const ratingAverages = {};
-    appRatingAvgResult.forEach((obj) => ratingAverages[obj.ID] = obj.rating);
-    const finalResult = [];
-    applicationsResult.forEach((obj) => {
-        const object = finalResult.find((value) => value.ID === obj.ID)
-        if(object == undefined) {
-            finalResult.push({
-                ID:obj.ID,
-                name:obj.name,
-                updateDate:DateTime.fromSQL(obj.update_date).toUTC().toISO(),
-                public:obj.public,
-                downloads:obj.downloads,
-                description:obj.description,
-                rating:ratingAverages[obj.ID] || 0,
-                tags:[obj.tag]
-            });
-        } else {
-            object.tags.push(obj.tag);
+        },
+        order: [["downloads", downloadsFilter ? "ASC" : "DESC"]],
+        ...(limit ? { limit } : { limit: 200 })
+    });
+    const ratings = await Opinion.findAll({
+        attributes:["idApplication", [Sequelize.fn("AVG", Sequelize.col("rating")), "rating"]],
+        group:["idApplication"],
+        where:{
+            idApplication:{
+                [Op.in]:applications.map((obj) => obj.id)
+            }
         }
     });
-    res.status(200).json({message:"Retriviered applications", applications:finalResult});
+    const ratingMap = new Map(
+        ratings.map((obj) => [obj.idApplication, obj.rating])
+    );
+    applications.forEach((app) => app.rating = ratingMap.get(app.id) ?? 0)
+
+    res.status(200).json({message:"Retriviered applications", applications});
 });
 
 // uploading application image using ID_application
